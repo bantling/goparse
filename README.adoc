@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+:doctype: article
+
+= Simple Parser
+
+A parser for LL(1) languages that takes simple productions
+
+== Production syntax
+
+Productions are specified as Extended Backus-Naur Form (see https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form).
+The EBNF syntax varies from the one described by making it more like the regular expression syntax programmers are used to,
+and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form).
+
+. Terminals are single or double-quoted strings, or square bracket character ranges
+. The following sequences in a string or character range have their usual meaning: \\, \t, \r, \n
+. Items in a list must have at least one space or tab between them
+. A group is a list enclosed in round brackets, which may be followed by the required number of repetitions:
+.. * for 0 or more repetitions
+.. + for 1 or more repetitions
+.. {N} for exactly N repetitions
+.. {N,} for at least N repetitions
+.. {,N} for at most N repetitions
+.. {N,M} for at least N and at most M repetitions, where N must be ≤ M
+. Comments
+.. Single line starting with // and ending with any EOL sequence
+.. Mutiline starting with /* and ending with with */
+
+The BNF rules for this variant of EBNF are as follows (whitespace is not significant):
+
+....
+<utf8-char> ::= ? all UTF-8 chars except ASCII control chars and forward slash ?
+<letter> ::= ? all ASCII upper and lowercase letters ?
+<digit> ::= ? all arabic digits ?
+<no-quote-char> ::= ? all UTF-8 chars except a single or double quote or forward slash ?
+
+<rule-char> ::= <letter> | <digit> | "-"
+<rule-chars> ::= "" | <rule-char> <rule-chars>
+<rule-name> ::= <letter> <rule-chars>
+
+<escaped-char> ::= <utf8-char> | "\\" | "\t" | "\r" | "\n"
+<no-unescaped-quote-part> ::= <no-quote-char> | <escaped-char> | "\'" | '\"'
+<no-unescaped-quote-string> ::= "" | <no-unescaped-quote-part> <no-unescaped-quote-string>
+<string> ::= "'" <no-unescaped-quote-string> "'" | '"' <no-unescaped-quote-string> '"'
+
+<character-range-char> := <escaped-char> | "\]" 
+<character-range-chars> ::= "" | <character-range-char> <character-range-chars> 
+<character-range> ::= "[" <character-range-char> <character-range-chars> "]"
+ 
+<terminal-part> ::= <string> | <character-range>
+<terminal-parts> ::= "" | <terminal-part> <terminal-parts>
+<terminal> ::= <terminal-part> <terminal-parts>
+
+<list-item> ::= <rule-name> | <terminal>
+<list> ::= <list-item> | <list-item> "," <list>
+
+<number> ::= <digit> | <digit> <number>
+<repetitions> ::= "" |
+                  "{" <number> "}" |
+                  "{" <number> "," "}" |
+                  "{" "," <number> "}" |
+                  "{" <number> "," <number> "}" |
+                  "*" |
+                  "+"
+
+<expression-item> ::= <list> | "(" <list> ")" <repetitions>
+<expression> ::= <expression-item> | <expression-item> "|" <expression>
+
+<rule> ::= <rule-name> "=" <expression> ";"
+<grammar> ::= <rule> | <rule> <grammar>
+....
+
+== Compatability with BNF
+
+The BNF usage of angle brackets and ::= is not supported.
+Terminals must be surrounded by single or double quotes.
