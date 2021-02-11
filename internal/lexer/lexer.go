@@ -18,6 +18,10 @@ const (
 	String
 	CharacterRange
 	Repetition
+	OptionAST
+	OptionEOL
+	OptionIndent
+	OptionOutdent
 	OpenParens
 	CloseParens
 	Bar
@@ -26,6 +30,9 @@ const (
 	SemiColon
 	EOF
 )
+
+// OptionType map of valid token strings
+var optionStrings = []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
 
 // error message constants
 const (
@@ -37,6 +44,7 @@ const (
 	ErrCharacterRangeEmpty         = "A character range cannot be empty"
 	ErrCharacterRangeOutOfOrder    = "A character range must be in order, where begin character <= last character"
 	ErrRepetitionForm              = "A repetition must be of one of the following forms: {N} or {N,} or {,N} or {N,M}; where N and M are integers, when M present N <= M, when using form {N} N must be > 0"
+	ErrInvalidOption               = "The only valid options are :AST, :EOL, :INDENT, and :OUTDENT"
 )
 
 // LexToken is a single lexical token
@@ -46,6 +54,7 @@ type LexToken struct {
 	formattedToken string        // formatted token
 	charRange      map[rune]bool // character range
 	n, m           int           // repetitions
+
 }
 
 // Type is the lexical token type
@@ -102,13 +111,13 @@ func (l Lexer) Next() LexToken {
 		typ                      LexType
 		token                    strings.Builder
 		formattedToken           strings.Builder
-		commentState             int  // 0 = initial /, 1 = single line, 2 = multiline looking for *, 3 = multiline trailing /
-		doubleQuotes             bool // true = double quoted String, false = single quoted String
-		rangeState               int  // 0 = initial, 1 = begin, 2 = range, 3 = after end
-		rangeBegin               rune // begin and end chars of a single range
-		rangeChars               map[rune]bool
-		repetitionState          bool // false = N, true = M
-		repetitionN, repetitionM int  // value of N and M
+		commentState             int           // 0 = initial /, 1 = single line, 2 = multiline looking for *, 3 = multiline trailing /
+		doubleQuotes             bool          // true = double quoted String, false = single quoted String
+		rangeState               int           // 0 = initial, 1 = begin, 2 = range, 3 = after end
+		rangeBegin               rune          // begin and end chars of a single range
+		rangeChars               map[rune]bool // map of all chars in a range
+		repetitionState          bool          // false = N, true = M
+		repetitionN, repetitionM int           // value of N and M
 		nextChar                 rune
 		nextCharText             string
 		nextCharEscaped          bool
@@ -285,6 +294,12 @@ MAIN_LOOP:
 					m:              -1,
 				}
 				break MAIN_LOOP
+
+			case ':':
+				typ = OptionAST // choose first for now
+				token.WriteRune(nextChar)
+				formattedToken.WriteRune(nextChar)
+				continue MAIN_LOOP
 
 			case '(':
 				result = LexToken{
@@ -648,6 +663,33 @@ MAIN_LOOP:
 
 				panic(ErrRepetitionForm)
 			}
+
+		case OptionAST:
+			// Remain at type AST until we have read whole option string
+			// Like identifier, negative end: stop on first non-letter char
+			if (nextChar >= 'A') && (nextChar <= 'Z') {
+				token.WriteRune(nextChar)
+				formattedToken.WriteString(nextCharText)
+				continue MAIN_LOOP
+			}
+
+			// Must be first char of next token
+			l.reader.UnreadRune()
+
+			// String must match a value optionStrings
+			tokenStr := token.String()
+			for i, optionStr := range optionStrings {
+				if tokenStr == optionStr {
+					result = LexToken{
+						typ:            LexType(int(OptionAST) + i),
+						token:          token.String(),
+						formattedToken: formattedToken.String(),
+					}
+					break MAIN_LOOP
+				}
+			}
+
+			panic(ErrInvalidOption)
 		}
 	}
 

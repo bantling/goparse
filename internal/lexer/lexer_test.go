@@ -653,6 +653,46 @@ func TestRepetition(t *testing.T) {
 	}
 }
 
+func TestOptions(t *testing.T) {
+	var (
+		text   string
+		reader io.Reader
+		lexer  *Lexer
+		token  LexToken
+	)
+
+	text = ":AST :EOL:INDENT :OUTDENT "
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+
+	options := []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
+	types := []LexType{OptionAST, OptionEOL, OptionIndent, OptionOutdent}
+	for i, typ := range types {
+		token = lexer.Next()
+		assert.Equal(t, typ, token.Type())
+		assert.Equal(t, options[i], token.Token())
+		assert.Equal(t, options[i], token.String())
+	}
+
+	eof := lexer.Next()
+	assert.Equal(t, EOF, eof.Type())
+	assert.Equal(t, "", eof.Token())
+	assert.Equal(t, "", eof.String())
+
+	func() {
+		defer func() {
+			assert.Equal(t, ErrInvalidOption, recover())
+		}()
+
+		text = ":NOSUCHOPT "
+		reader = strings.NewReader(text)
+		lexer = NewLexer(reader)
+
+		lexer.Next()
+		assert.Fail(t, "Must panic")
+	}()
+}
+
 func TestSymbols(t *testing.T) {
 	var (
 		text   string

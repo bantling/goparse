@@ -11,19 +11,32 @@ Productions are specified as Extended Backus-Naur Form (see https://en.wikipedia
 The EBNF syntax varies from the one described by making it more like the regular expression syntax programmers are used to,
 and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form).
 
-. Terminals are single or double-quoted strings, or square bracket character ranges
+. Terminal strings are single or double-quoted strings, or square bracket character ranges
 . The following sequences in a string or character range have their usual meaning: \\, \t, \r, \n
+.. Inside a terminal string, both single and double quotes can be escaped
+.. Inside a character range, a closing square bracket can be escaped
 . Items in a list must have at least one space or tab between them
 . A group is a list enclosed in round brackets, which may be followed by the required number of repetitions:
 .. * for 0 or more repetitions
 .. + for 1 or more repetitions
-.. {N} for exactly N repetitions
-.. {N,} for at least N repetitions
-.. {,N} for at most N repetitions
-.. {N,M} for at least N and at most M repetitions, where N must be ≤ M
+.. {N} for exactly N repetitions, where N > 0
+.. {N,} for at least N repetitions, where N ≥ 0
+.. {,N} for at most N repetitions, where N ≥ 1
+.. {N,M} for at least N and at most M repetitions, where N ≥ 0, M ≥ N and if N = 0 then M ≥ 1
+.. The only reason to group items is to use repetitions
+.. A single item can be followed by repetitions without enclosing it in round brackets
 . Comments
 .. Single line starting with // and ending with any EOL sequence
 .. Mutiline starting with /* and ending with with */
+. Auto CST generation - a rule name or string terminal in a rule definition may be followed by :AST to indicate it is not needed in the parse tree, only in the String() method
+. Pretty printing
+.. Affects only the String() method of each node
+.. A rule name or terminal in a rule definition may be followed by:
+... :EOL to add a newline
+... :INDENT to increase indent by 4 spaces
+... :OUTDENT to decrease indent by 4 spaces
+... May be combined like :EOL:INDENT or :EOL :OUTDENT
+.. A pretty printer to be created simply by parsing and calling the String() method of root node.
 
 The BNF rules for this variant of EBNF are as follows (whitespace is not significant):
 
@@ -50,7 +63,14 @@ The BNF rules for this variant of EBNF are as follows (whitespace is not signifi
 <terminal-parts> ::= "" | <terminal-part> <terminal-parts>
 <terminal> ::= <terminal-part> <terminal-parts>
 
-<list-item> ::= <rule-name> | <terminal>
+<ast> ::= ":AST"
+<fmt-eol> ::= ":EOL"
+<fmt-indent> ::= ":INDENT"
+<fmt-outdent> ::= "OUTDENT"
+<list-item-option> ::= <ast> | <fmt-eol> | <fmt-indent> | <fmt-outdent>
+<list-item-options> ::= "" | <list-item-option> <list-item-options> 
+
+<list-item> ::= <rule-name> <list-item-options> | <terminal> <list-item-options>
 <list> ::= <list-item> | <list-item> "," <list>
 
 <number> ::= <digit> | <digit> <number>
