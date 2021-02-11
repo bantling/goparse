@@ -576,6 +576,42 @@ func TestRepetition(t *testing.T) {
 	assert.Equal(t, 2, n)
 	assert.Equal(t, 5, m)
 
+	text = "{0,}"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, Repetition, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	n, m = token.Repetitions()
+	assert.Equal(t, 0, n)
+	assert.Equal(t, -1, m)
+
+	text = "{0,1}"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, Repetition, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	n, m = token.Repetitions()
+	assert.Equal(t, 0, n)
+	assert.Equal(t, 1, m)
+
+	text = "?"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, Repetition, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	n, m = token.Repetitions()
+	assert.Equal(t, 0, n)
+	assert.Equal(t, 1, m)
+
 	text = "*"
 	reader = strings.NewReader(text)
 	lexer = NewLexer(reader)
@@ -599,6 +635,22 @@ func TestRepetition(t *testing.T) {
 	n, m = token.Repetitions()
 	assert.Equal(t, 1, n)
 	assert.Equal(t, -1, m)
+
+	panicChecker := func(badRepetition string) {
+		defer func() {
+			assert.Equal(t, ErrRepetitionForm, recover())
+		}()
+
+		reader = strings.NewReader(badRepetition)
+		lexer = NewLexer(reader)
+		lexer.Next()
+
+		assert.Fail(t, "Must panic with ErrRepetitionForm")
+	}
+
+	for _, failCase := range []string{"{}", "{,}", "{0}", "{0,0}", "{1, 0}", "{2, 1}"} {
+		panicChecker(failCase)
+	}
 }
 
 func TestSymbols(t *testing.T) {

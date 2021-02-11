@@ -36,7 +36,7 @@ const (
 	ErrInvalidCharacterRangeEscape = "The only valid character range escape sequences are \\\\, \\t, \\r, \\n, and \\]"
 	ErrCharacterRangeEmpty         = "A character range cannot be empty"
 	ErrCharacterRangeOutOfOrder    = "A character range must be in order, where begin character <= last character"
-	ErrRepetitionForm              = "A repetition must be of one of the following forms: {N} or {N,} or {,N} or {N,M}; where N and M are integers >= 1, and when M present N <= M"
+	ErrRepetitionForm              = "A repetition must be of one of the following forms: {N} or {N,} or {,N} or {N,M}; where N and M are integers, when M present N <= M, when using form {N} N must be > 0"
 )
 
 // LexToken is a single lexical token
@@ -252,6 +252,17 @@ MAIN_LOOP:
 				repetitionN = -1        // Must have at least one char
 				repetitionM = -1        // May not have an M
 				continue MAIN_LOOP
+
+			case '?':
+				// zero or one repetitions - same as {0,1}
+				result = LexToken{
+					typ:            Repetition,
+					token:          "?",
+					formattedToken: "?",
+					n:              0,
+					m:              1,
+				}
+				break MAIN_LOOP
 
 			case '*':
 				// zero or more repetitions - same as {0,}
@@ -573,8 +584,8 @@ MAIN_LOOP:
 					token.WriteRune(nextChar)
 					formattedToken.WriteString(nextCharText)
 
-					if repetitionN == -1 {
-						// N must have a value
+					if repetitionN < 1 {
+						// N must have a value >= 1
 						panic(ErrRepetitionForm)
 					}
 
@@ -612,8 +623,8 @@ MAIN_LOOP:
 						panic(ErrRepetitionForm)
 					}
 
-					// N and M cannot be zero
-					if (repetitionN == 0) || (repetitionM == 0) {
+					// N can be zero, M must be -1 or >= 1
+					if repetitionM == 0 {
 						panic(ErrRepetitionForm)
 					}
 

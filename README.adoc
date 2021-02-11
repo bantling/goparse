@@ -59,6 +59,7 @@ The BNF rules for this variant of EBNF are as follows (whitespace is not signifi
                   "{" <number> "," "}" |
                   "{" "," <number> "}" |
                   "{" <number> "," <number> "}" |
+                  "?" |
                   "*" |
                   "+"
 
