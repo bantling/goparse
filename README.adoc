@@ -74,14 +74,14 @@ The BNF rules for this variant of EBNF are as follows (whitespace is not signifi
 <list> ::= <list-item> | <list-item> "," <list>
 
 <number> ::= <digit> | <digit> <number>
-<repetitions> ::= "" |
-                  "{" <number> "}" |
-                  "{" <number> "," "}" |
-                  "{" "," <number> "}" |
-                  "{" <number> "," <number> "}" |
-                  "?" |
-                  "*" |
-                  "+"
+<repetitions> ::= ""
+    | "{" <number> "}"
+    | "{" <number> "," "}"
+    | "{" "," <number> "}"
+    | "{" <number> "," <number> "}"
+    | "?"
+    | "*"
+    | "+"
 
 <expression-item> ::= <list> | "(" <list> ")" <repetitions>
 <expression> ::= <expression-item> | <expression-item> "|" <expression>

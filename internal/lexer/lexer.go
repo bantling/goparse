@@ -31,8 +31,10 @@ const (
 	EOF
 )
 
-// OptionType map of valid token strings
-var optionStrings = []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
+// map of valid options strings
+var (
+	optionStrings = []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
+)
 
 // error message constants
 const (
