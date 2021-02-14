@@ -1,4 +1,5 @@
-//package parser
+package parser
+
 //
 //import (
 //	"fmt"
@@ -9,6 +10,6 @@
 //	"github.com/stretchr/testify/assert"
 //)
 //
-//func TestTerminalNode(t *testing.T) {
-//	node := 
+//func TestTerminal(t *testing.T) {
+//	node :=
 //}
