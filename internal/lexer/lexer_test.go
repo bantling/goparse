@@ -118,46 +118,51 @@ func TestIdentifier(t *testing.T) {
 func TestString(t *testing.T) {
 	var (
 		text   string
+		quoted string
 		reader io.Reader
 		lexer  *Lexer
 		token  LexToken
 	)
 
 	text = "single quoted"
-	reader = strings.NewReader(fmt.Sprintf("'%s'", text))
+	quoted = fmt.Sprintf("'%s'", text)
+	reader = strings.NewReader(quoted)
 	lexer = NewLexer(reader)
 	token = lexer.Next()
 
 	assert.Equal(t, String, token.Type())
 	assert.Equal(t, text, token.Token())
-	assert.Equal(t, text, token.String())
+	assert.Equal(t, quoted, token.String())
 
 	text = "single \\\\ \\t \\r \\n \\' \" quoted"
-	reader = strings.NewReader(fmt.Sprintf("'%s'", text))
+	quoted = fmt.Sprintf("'%s'", text)
+	reader = strings.NewReader(quoted)
 	lexer = NewLexer(reader)
 	token = lexer.Next()
 
 	assert.Equal(t, String, token.Type())
 	assert.Equal(t, "single \\ \t \r \n ' \" quoted", token.Token())
-	assert.Equal(t, text, token.String())
+	assert.Equal(t, quoted, token.String())
 
 	text = "double quoted"
-	reader = strings.NewReader(fmt.Sprintf("\"%s\"", text))
+	quoted = fmt.Sprintf("\"%s\"", text)
+	reader = strings.NewReader(quoted)
 	lexer = NewLexer(reader)
 	token = lexer.Next()
 
 	assert.Equal(t, String, token.Type())
 	assert.Equal(t, text, token.Token())
-	assert.Equal(t, text, token.String())
+	assert.Equal(t, quoted, token.String())
 
 	text = "double \\\\ \\t \\r \\n ' \\\" quoted"
-	reader = strings.NewReader(fmt.Sprintf("\"%s\"", text))
+	quoted = fmt.Sprintf("\"%s\"", text)
+	reader = strings.NewReader(quoted)
 	lexer = NewLexer(reader)
 	token = lexer.Next()
 
 	assert.Equal(t, String, token.Type())
 	assert.Equal(t, "double \\ \t \r \n ' \" quoted", token.Token())
-	assert.Equal(t, text, token.String())
+	assert.Equal(t, quoted, token.String())
 
 	func() {
 		defer func() {

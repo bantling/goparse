@@ -8,43 +8,43 @@ import (
 
 // ====
 
-// LexicalNode is the base structure for all nodes that want the original lexical string as part or all of String().
-type LexicalNode struct {
-	lexicalString string
+// SourceNode is the base structure for all nodes that provides the original source text via String()
+type SourceNode struct {
+	sourceString string
 }
 
-// String returns the origin lexical string
-func (n LexicalNode) String() string {
-	return n.lexicalString
+// OfSourceNode constructs a SourceNode
+func OfSourceNode(sourceString string) SourceNode {
+	return SourceNode{sourceString: sourceString}
+}
+
+// String returns the origin source string
+func (s SourceNode) String() string {
+	return s.sourceString
 }
 
 // ====
 
-// Terminal is a string or character range.
-// If the string is "", then the terminal is a character range, else it is a string.
+// Terminal is a string or character range
 type Terminal struct {
-	LexicalNode
+	SourceNode
 	theString string
 	theRange  map[rune]bool
 }
 
 // OfTerminalString constructs a Terminal from a string
-func OfTerminalString(lexicalString, terminalString string) Terminal {
+func OfTerminalString(sourceString, terminalString string) Terminal {
 	return Terminal{
-		LexicalNode: LexicalNode{
-			lexicalString: lexicalString,
-		},
-		theString: terminalString,
+		SourceNode: OfSourceNode(sourceString),
+		theString:  terminalString,
 	}
 }
 
 // OfTerminalRange constructs a Terminal from a range
-func OfTerminalRange(lexicalString string, theRange map[rune]bool) Terminal {
+func OfTerminalRange(sourceString string, theRange map[rune]bool) Terminal {
 	return Terminal{
-		LexicalNode: LexicalNode{
-			lexicalString: lexicalString,
-		},
-		theRange: theRange,
+		SourceNode: OfSourceNode(sourceString),
+		theRange:   theRange,
 	}
 }
 
@@ -74,29 +74,27 @@ func (t Terminal) TerminalRange() map[rune]bool {
 // If the rule name is "", then the item is a terminal, else it is a rule name.
 // Options can be applied to a rule name or a terminal.
 type ListItem struct {
-	LexicalNode
+	SourceNode
 	ruleName string
 	terminal Terminal
 	options  []lexer.LexType
 }
 
 // OfListItemRuleName constructs a ListItem from a rule name and options
-func OfListItemRuleName(lexicalString, ruleName string, options []lexer.LexType) ListItem {
+func OfListItemRuleName(sourceString string, ruleName string, options []lexer.LexType) ListItem {
 	return ListItem{
-		LexicalNode: LexicalNode{
-			lexicalString: lexicalString,
-		},
-		ruleName: ruleName,
-		options:  options,
+		SourceNode: OfSourceNode(sourceString),
+		ruleName:   ruleName,
+		options:    options,
 	}
 }
 
 // OfListItemTerminal constructs a ListItem from a terminal and options
-func OfListItemTerminal(terminal Terminal, options []lexer.LexType) ListItem {
+func OfListItemTerminal(sourceString string, terminal Terminal, options []lexer.LexType) ListItem {
 	return ListItem{
-		LexicalNode: terminal.LexicalNode,
-		terminal:    terminal,
-		options:     options,
+		SourceNode: OfSourceNode(sourceString),
+		terminal:   terminal,
+		options:    options,
 	}
 }
 
@@ -127,21 +125,19 @@ func (itm ListItem) Terminal() Terminal {
 // There is always a lower bound.
 // If M == -1, there is no upper bound.
 type ExpressionItem struct {
-	LexicalNode
+	SourceNode
 	list []ListItem
 	n    int
 	m    int
 }
 
 // OfExpressionItem constructs an ExpressionItem from a list of ListItem and n, m repetitions
-func OfExpressionItem(lexicalString string, list []ListItem, n, m int) ExpressionItem {
+func OfExpressionItem(sourceString string, list []ListItem, n, m int) ExpressionItem {
 	return ExpressionItem{
-		LexicalNode: LexicalNode{
-			lexicalString: lexicalString,
-		},
-		list: list,
-		n:    n,
-		m:    m,
+		SourceNode: OfSourceNode(sourceString),
+		list:       list,
+		n:          n,
+		m:          m,
 	}
 }
 
@@ -161,13 +157,15 @@ func (itm ExpressionItem) Repetitions() (n, m int) {
 
 // Expression is one or more expression items
 type Expression struct {
+	SourceNode
 	items []ExpressionItem
 }
 
 // OfExpression constructs a Expression from a list of expression items
-func OfExpression(items []ExpressionItem) Expression {
+func OfExpression(sourceString string, items []ExpressionItem) Expression {
 	return Expression{
-		items: items,
+		SourceNode: OfSourceNode(sourceString),
+		items:      items,
 	}
 }
 
@@ -176,56 +174,21 @@ func (e Expression) Items() []ExpressionItem {
 	return e.items
 }
 
-// String returns a formatted string, with a bar between each expression item.
-// If the expression fits within 80 chars, it is on one line, else it is multi-line.
-func (e Expression) String() string {
-	var (
-		result            strings.Builder
-		sameLineSeparator = " | "
-		nextLineSeparator = "\n    | "
-		isSameLine        = true
-	)
-
-	// try to write on one line, but if line gets > 80 chars, switch to multiline
-	for i, itm := range e.items {
-		if i > 0 {
-			if isSameLine {
-				// Write separator on same line
-				result.WriteString(sameLineSeparator)
-
-				if result.Len() >= 80 {
-					// Exceeded line length - replace every sameLineSeparator with a nextLineSeparator
-					currentResult := result.String()
-					result.Reset()
-					result.WriteString(strings.ReplaceAll(currentResult, sameLineSeparator, nextLineSeparator))
-
-					// Switch line mode to every item on a line by itself
-					isSameLine = false
-				}
-			} else {
-				result.WriteString(nextLineSeparator)
-			}
-		}
-
-		result.WriteString(itm.String())
-	}
-
-	return result.String()
-}
-
 // ====
 
 // Rule is a rule name and expression
 type Rule struct {
+	SourceNode
 	name string
 	expr Expression
 }
 
 // OfRule constructs a rule from a name and expression
-func OfRule(name string, expr Expression) Rule {
+func OfRule(sourceString string, name string, expr Expression) Rule {
 	return Rule{
-		name: name,
-		expr: expr,
+		SourceNode: OfSourceNode(sourceString),
+		name:       name,
+		expr:       expr,
 	}
 }
 
@@ -255,32 +218,19 @@ func (r Rule) String() string {
 
 // Grammar is one or more rules
 type Grammar struct {
+	SourceNode
 	rules []Rule
 }
 
 // OfGrammar constructs a Grammar from a list of rules
-func OfGrammar(rules []Rule) Grammar {
+func OfGrammar(sourceString string, rules []Rule) Grammar {
 	return Grammar{
-		rules: rules,
+		SourceNode: OfSourceNode(sourceString),
+		rules:      rules,
 	}
 }
 
 // Rules returns the set of rules
 func (g Grammar) Rules() []Rule {
 	return g.rules
-}
-
-// String returns a formatted string as a series of rules, with a newline after each one
-func (g Grammar) String() string {
-	var result strings.Builder
-
-	for i, r := range g.rules {
-		if i > 0 {
-			result.WriteRune('\n')
-		}
-
-		result.WriteString(r.String())
-	}
-
-	return result.String()
 }

@@ -36,6 +36,11 @@ var (
 	optionStrings = []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
 )
 
+// String is a formatted string for a LexType
+func (t LexType) String() string {
+	return optionStrings[uint(t)-uint(OptionAST)]
+}
+
 // error message constants
 const (
 	ErrUnexpectedEOF               = "Unexpected EOF"
@@ -239,11 +244,13 @@ MAIN_LOOP:
 
 			case '"':
 				typ = String
+				formattedToken.WriteRune(nextChar)
 				doubleQuotes = true
 				continue MAIN_LOOP
 
 			case '\'':
 				typ = String
+				formattedToken.WriteRune(nextChar)
 				doubleQuotes = false
 				continue MAIN_LOOP
 
@@ -452,6 +459,7 @@ MAIN_LOOP:
 			if (doubleQuotes && (nextChar == '"') && (!nextCharEscaped)) ||
 				((!doubleQuotes) && (nextChar == '\'') && (!nextCharEscaped)) {
 				// Allow zero length terminals, they mean epsilon
+				formattedToken.WriteRune(nextChar)
 				result = LexToken{
 					typ:            typ,
 					token:          token.String(),
