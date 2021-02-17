@@ -1,8 +1,6 @@
 package parser
 
 import (
-	"strings"
-
 	"github.com/bantling/goparse/internal/lexer"
 )
 
@@ -200,18 +198,6 @@ func (r Rule) Name() string {
 // Expr the expression
 func (r Rule) Expr() Expression {
 	return r.expr
-}
-
-// String returns a formatted string, as rulename = expression;
-func (r Rule) String() string {
-	var result strings.Builder
-
-	result.WriteString(r.name)
-	result.WriteString(" = ")
-	result.WriteString(r.expr.String())
-	result.WriteRune(';')
-
-	return result.String()
 }
 
 // ====

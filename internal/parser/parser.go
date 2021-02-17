@@ -4,7 +4,7 @@ import (
 	"github.com/bantling/goparse/internal/lexer"
 )
 
-// Parser performs parsing
+// Parser is the grammar parser that converts source text into a Grammar
 type Parser struct {
 	lex lexer.Lexer
 }

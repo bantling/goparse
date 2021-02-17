@@ -46,28 +46,8 @@ func TestListItem(t *testing.T) {
 	assert.Equal(t, Terminal{}, item.Terminal())
 	assert.Equal(t, src, item.String())
 
-	src = "'single \\\\ \\t \\r \\n \\' \" quoted'"
-	str := "single \\ \t \r \n ' \" quoted"
-	term := OfTerminalString(src, str)
-	item = OfListItemTerminal(src, term, nil)
-	assert.False(t, item.IsRuleName())
-	assert.True(t, item.IsTerminal())
-	assert.Equal(t, "", item.RuleName())
-	assert.Equal(t, term, item.Terminal())
-	assert.Equal(t, src, item.String())
-
-	src = "'single \\\\ \\t \\r \\n \\' \" quoted':EOL:INDENT"
-	str = "single \\ \t \r \n ' \" quoted"
-	term = OfTerminalString(src, str)
-	item = OfListItemTerminal(src, term, []lexer.LexType{lexer.OptionEOL, lexer.OptionIndent})
-	assert.False(t, item.IsRuleName())
-	assert.True(t, item.IsTerminal())
-	assert.Equal(t, "", item.RuleName())
-	assert.Equal(t, term, item.Terminal())
-	assert.Equal(t, src, item.String())
-
 	src = "[A-C]"
-	term = OfTerminalRange(src, map[rune]bool{'A': true, 'B': true, 'C': true})
+	term := OfTerminalRange(src, map[rune]bool{'A': true, 'B': true, 'C': true})
 	item = OfListItemTerminal(src, term, nil)
 	assert.False(t, item.IsRuleName())
 	assert.True(t, item.IsTerminal())
@@ -83,7 +63,6 @@ func TestListItem(t *testing.T) {
 	assert.Equal(t, "", item.RuleName())
 	assert.Equal(t, term, item.Terminal())
 	assert.Equal(t, src, item.String())
-
 }
 
 func TestExpressionItem(t *testing.T) {
@@ -148,4 +127,34 @@ func TestExpression(t *testing.T) {
 	expr = OfExpression(allSrc, allItems)
 	assert.Equal(t, allItems, expr.Items())
 	assert.Equal(t, allSrc, expr.String())
+}
+
+func TestRule(t *testing.T) {
+	src := "lhsrulename = rhsrulename"
+	name := src
+	item := OfListItemRuleName(src, name, nil)
+	items := []ListItem{item}
+	exprItem := OfExpressionItem(src, items, 1, 1)
+	exprItems := []ExpressionItem{exprItem}
+	expr := OfExpression(src, exprItems)
+	rule := OfRule(src, "lhsrulename", expr)
+	assert.Equal(t, "lhsrulename", rule.Name())
+	assert.Equal(t, expr, rule.Expr())
+	assert.Equal(t, src, expr.String())
+}
+
+func TestGrammar(t *testing.T) {
+	src := "lhsrulename = rhsrulename"
+	name := src
+	item := OfListItemRuleName(src, name, nil)
+	items := []ListItem{item}
+	exprItem := OfExpressionItem(src, items, 1, 1)
+	exprItems := []ExpressionItem{exprItem}
+	expr := OfExpression(src, exprItems)
+	rule := OfRule(src, "lhsrulename", expr)
+	rules := []Rule{rule}
+	grammar := OfGrammar(src, rules)
+	assert.Equal(t, "lhsrulename", rule.Name())
+	assert.Equal(t, rules, grammar.Rules())
+	assert.Equal(t, src, grammar.String())
 }

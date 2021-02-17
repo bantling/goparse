@@ -723,3 +723,7 @@ func TestSymbols(t *testing.T) {
 	assert.Equal(t, "", eof.Token())
 	assert.Equal(t, "", eof.String())
 }
+
+func TestLineNumber(t *testing.T) {
+
+}

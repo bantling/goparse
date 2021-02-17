@@ -97,7 +97,8 @@ func (l LexToken) Repetitions() (n, m int) {
 
 // Lexer is the lexical analyzer that returns lexical tokens from input
 type Lexer struct {
-	reader io.RuneScanner
+	reader     io.RuneScanner
+	lineNumber int
 }
 
 // NewLexer constructs a Lexer from an io.Reader
@@ -108,13 +109,15 @@ func NewLexer(source io.Reader) *Lexer {
 	}
 
 	return &Lexer{
-		reader: bytes.NewReader(buf),
+		reader:     bytes.NewReader(buf),
+		lineNumber: 1,
 	}
 }
 
 // Next reads next lexical token, choosing longest possible sequence
-func (l Lexer) Next() LexToken {
+func (l *Lexer) Next() LexToken {
 	var (
+		lastReadCR               bool
 		typ                      LexType
 		token                    strings.Builder
 		formattedToken           strings.Builder
@@ -199,6 +202,7 @@ func (l Lexer) Next() LexToken {
 			}
 		}
 	}
+
 MAIN_LOOP:
 	for true {
 		nextChar, _, err = l.reader.ReadRune()
@@ -224,8 +228,26 @@ MAIN_LOOP:
 				(nextChar == '\t') ||
 				(nextChar == '\r') ||
 				(nextChar == '\n') {
+				// Handle line number counting
+				if nextChar == '\r' {
+					l.lineNumber++
+					lastReadCR = true // May be part of CRLF
+				} else if nextChar == '\n' {
+					if lastReadCR {
+						// CRLF, already incremented line number on CR
+						lastReadCR = false
+					} else {
+						// LF by itself
+						l.lineNumber++
+					}
+				} else {
+					// Space or tab, clear CR flag if set
+					lastReadCR = false
+				}
+
 				continue MAIN_LOOP
 			}
+			lastReadCR = false
 
 			// Letter is first char of an identifier
 			if ((nextChar >= 'A') && (nextChar <= 'Z')) ||
