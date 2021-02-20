@@ -528,7 +528,6 @@ MAIN_LOOP:
 				if (nextChar == ']') && (!nextCharEscaped) {
 					if rangeInverted {
 						// Valid range of not nothing = everything
-						// Dumb, but allowed
 						return Token{
 							typ:               typ,
 							token:             token.String(),
@@ -541,8 +540,9 @@ MAIN_LOOP:
 					panic(ErrCharacterRangeEmpty)
 				}
 
-				if nextChar == '^' {
+				if (nextChar == '^') && (!rangeInverted) {
 					// Starts with ^, so invert the range
+					// If range is already inverted, must be ^^, where second ^ is literal, and may be part of range
 					rangeInverted = true
 					continue MAIN_LOOP
 				}
@@ -617,10 +617,11 @@ MAIN_LOOP:
 					token.WriteString(nextCharText)
 					formattedToken.WriteString(nextCharText)
 					return Token{
-						typ:            typ,
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
-						charRange:      rangeChars,
+						typ:               typ,
+						token:             token.String(),
+						formattedToken:    formattedToken.String(),
+						charRangeInverted: true,
+						charRange:         rangeChars,
 					}
 				}
 

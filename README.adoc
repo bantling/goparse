@@ -37,7 +37,9 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 . A nonterminal name is a letter followed by letters, digits, and dashes
 . A rule is a nonterminal name, an equals sign, and a vertical bar seperated list of productions
 . A nonterminal may be recursive by having one or more productions containing the nonterminal name
-. A terminal string cannot be empty   
+. A terminal string cannot be empty
+. Builtin terminals
+.. non-escape-char: all UTF-8 chars except ASCII control chars and backslash
 . Comments
 .. Single line starting with // and ending with any EOL sequence
 .. Mutiline starting with /* and ending with with */
@@ -51,8 +53,13 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 ... May be combined like :EOL:INDENT or :EOL :OUTDENT
 .. A pretty printer to be created simply by parsing and calling the String() method of root node.
 
-This variant of EBNF can be described in its own rules as follows (where non-escape-char is all UTF-8 chars except ASCII control chars and backslash):
+This variant of EBNF can be described in its own rules as follows:
 ....
+// Note that comment-oneline consumes the eol, but the eol is not part of the comment
+comment-oneline = "//" non-escape-char* ("\r" | "\n" | "\r\n")
+comment-multiline = "/*" non-escape-char* "*/"
+comment = comment-oneline | comment-multiline 
+
 general-escape = "\\" | "\t" | "\r" | "\n"
 
 string-escape = general-escape | "\'" | '\"'
@@ -66,19 +73,19 @@ int = [0-9]+
 repetition = 
   [?*+]
   | "{" int "}"
-  | "{" int ",}"
-  | "{," int "}"
+  | "{" int "," "}"
+  | "{" "," int "}"
   | "{" int "," int "}"
 
 terminal = (string | range)+
-nonterminal-name = [A-Za-z][A-Za-z0-9-]*
+identifier = [A-Za-z][A-Za-z0-9-]*
 
-expression-part = terminal | nonterminal-name
+expression-part = terminal | identifier
 expression = (expression-part+ | "(" expression-part+ ")") repetition?
  
 production = expression+  
 productions = production ("|" production)*
-nonterminal = nonterminal-name "=" productions ";"
+nonterminal = identifier "=" productions ";"
 
 grammar = nonterminal+
 ....

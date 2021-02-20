@@ -473,6 +473,50 @@ func TestCharacterRange(t *testing.T) {
 	assert.True(t, token.InvertedRange())
 	assert.Equal(t, map[rune]bool{}, token.Range())
 
+	text = "[^A]"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, CharacterRange, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	assert.True(t, token.InvertedRange())
+	assert.Equal(t, map[rune]bool{'A': true}, token.Range())
+
+	text = "[^-A]"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, CharacterRange, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	assert.True(t, token.InvertedRange())
+	assert.Equal(t, map[rune]bool{'-': true, 'A': true}, token.Range())
+
+	text = "[^^]"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, CharacterRange, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	assert.True(t, token.InvertedRange())
+	assert.Equal(t, map[rune]bool{'^': true}, token.Range())
+
+	text = "[^^-a]"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, CharacterRange, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	assert.True(t, token.InvertedRange())
+	assert.Equal(t, map[rune]bool{'^': true, '_': true, '`': true, 'a': true}, token.Range())
+
 	func() {
 		defer func() {
 			assert.Equal(t, ErrInvalidCharacterRangeEscape, recover())
