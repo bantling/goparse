@@ -11,20 +11,33 @@ Productions are specified as Extended Backus-Naur Form (see https://en.wikipedia
 The EBNF syntax varies from the one described by making it more like the regular expression syntax programmers are used to,
 and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form).
 
-. Terminal strings are single or double-quoted strings, or square bracket character ranges
+. Terminals are one more single or double-quoted strings and/or square bracket character ranges
+. A character range is interpreted as follows:
+.. If the first character is ^ it means the range is all characters except the ranges that follow
+.. In any other position a ^ is a literal character
+.. A sequence of X-Y indicates a closed range of characters from X through Y
+.. A - is a literal character in the following circumstances:
+... It is the first character, or second character if first is ^
+... It is the last character
+... It immediately follows a range (eg, A-Z- means A thru Z and -)
+.. Since there is no escape sequence for ^ or -, if they are to be included literally, they must be placed in a position that makes them literal 
 . The following sequences in a string or character range have their usual meaning: \\, \t, \r, \n
 .. Inside a terminal string, both single and double quotes can be escaped
 .. Inside a character range, a closing square bracket can be escaped
-. Items in a list must have at least one space or tab between them
-. A group is a list enclosed in round brackets, which may be followed by the required number of repetitions:
+. A list contains one or more nonterminal names and/or terminals  
+. A group is a list enclosed in round brackets, or a single list item without round brackets
+. A production is a group that may be followed by the number of repetitions:
+.. ? for 0 or 1 repetitions
 .. * for 0 or more repetitions
 .. + for 1 or more repetitions
 .. {N} for exactly N repetitions, where N > 0
 .. {N,} for at least N repetitions, where N ≥ 0
 .. {,N} for at most N repetitions, where N ≥ 1
 .. {N,M} for at least N and at most M repetitions, where N ≥ 0, M ≥ N and if N = 0 then M ≥ 1
-.. The only reason to group items is to use repetitions
-.. A single item can be followed by repetitions without enclosing it in round brackets
+. A nonterminal name is a letter followed by letters, digits, and dashes
+. A rule is a nonterminal name, an equals sign, and a vertical bar seperated list of productions
+. A nonterminal may be recursive by having one or more productions containing the nonterminal name
+. A terminal string cannot be empty   
 . Comments
 .. Single line starting with // and ending with any EOL sequence
 .. Mutiline starting with /* and ending with with */
@@ -38,59 +51,34 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 ... May be combined like :EOL:INDENT or :EOL :OUTDENT
 .. A pretty printer to be created simply by parsing and calling the String() method of root node.
 
-The BNF rules for this variant of EBNF are as follows (whitespace is not significant):
-
+This variant of EBNF can be described in its own rules as follows (where non-escape-char is all UTF-8 chars except ASCII control chars and backslash):
 ....
-<utf8-char> ::= ? all UTF-8 chars except ASCII control chars and forward slash ?
-<letter> ::= ? all ASCII upper and lowercase letters ?
-<digit> ::= ? all arabic digits ?
-<no-quote-char> ::= ? all UTF-8 chars except a single or double quote or forward slash ?
+general-escape = "\\" | "\t" | "\r" | "\n"
 
-<rule-char> ::= <letter> | <digit> | "-"
-<rule-chars> ::= "" | <rule-char> <rule-chars>
-<rule-name> ::= <letter> <rule-chars>
+string-escape = general-escape | "\'" | '\"'
+string-char = non-escape-char | string-escape
+string = "'" string-char+ "'" | '"' string-char+ '"'
 
-<escaped-char> ::= <utf8-char> | "\\" | "\t" | "\r" | "\n"
-<no-unescaped-quote-part> ::= <no-quote-char> | <escaped-char> | "\'" | '\"'
-<no-unescaped-quote-string> ::= "" | <no-unescaped-quote-part> <no-unescaped-quote-string>
-<string> ::= "'" <no-unescaped-quote-string> "'" | '"' <no-unescaped-quote-string> '"'
+range-escape = general-escape | "\]"
+range = "[" (non-escape-char | range-escape)+ "]"
 
-<character-range-char> := <escaped-char> | "\]" 
-<character-range-chars> ::= "" | <character-range-char> <character-range-chars> 
-<character-range> ::= "[" <character-range-char> <character-range-chars> "]"
+int = [0-9]+
+repetition = 
+  [?*+]
+  | "{" int "}"
+  | "{" int ",}"
+  | "{," int "}"
+  | "{" int "," int "}"
+
+terminal = (string | range)+
+nonterminal-name = [A-Za-z][A-Za-z0-9-]*
+
+expression-part = terminal | nonterminal-name
+expression = (expression-part+ | "(" expression-part+ ")") repetition?
  
-<terminal-part> ::= <string> | <character-range>
-<terminal-parts> ::= "" | <terminal-part> <terminal-parts>
-<terminal> ::= <terminal-part> <terminal-parts>
+production = expression+  
+productions = production ("|" production)*
+nonterminal = nonterminal-name "=" productions ";"
 
-<ast> ::= ":AST"
-<fmt-eol> ::= ":EOL"
-<fmt-indent> ::= ":INDENT"
-<fmt-outdent> ::= "OUTDENT"
-<list-item-option> ::= <ast> | <fmt-eol> | <fmt-indent> | <fmt-outdent>
-<list-item-options> ::= "" | <list-item-option> <list-item-options> 
-
-<list-item> ::= <rule-name> <list-item-options> | <terminal> <list-item-options>
-<list> ::= <list-item> | <list-item> "," <list>
-
-<number> ::= <digit> | <digit> <number>
-<repetitions> ::= ""
-    | "{" <number> "}"
-    | "{" <number> "," "}"
-    | "{" "," <number> "}"
-    | "{" <number> "," <number> "}"
-    | "?"
-    | "*"
-    | "+"
-
-<expression-item> ::= <list> | "(" <list> ")" <repetitions>
-<expression> ::= <expression-item> | <expression-item> "|" <expression>
-
-<rule> ::= <rule-name> "=" <expression> ";"
-<grammar> ::= <rule> | <rule> <grammar>
+grammar = nonterminal+
 ....
-
-== Compatability with BNF
-
-The BNF usage of angle brackets and ::= is not supported.
-Terminals must be surrounded by single or double quotes.

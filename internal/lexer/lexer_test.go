@@ -14,7 +14,7 @@ func TestSkipWhitespaceEOF(t *testing.T) {
 		text   string
 		reader io.Reader
 		lexer  *Lexer
-		eof    LexToken
+		eof    Token
 	)
 
 	text = " \t \r \n \r\n  \t\t\r\r\n\n\r\n\r\n"
@@ -31,8 +31,8 @@ func TestComment(t *testing.T) {
 		text   string
 		reader io.Reader
 		lexer  *Lexer
-		token  LexToken
-		eof    LexToken
+		token  Token
+		eof    Token
 	)
 
 	// Single line comment
@@ -82,8 +82,8 @@ func TestIdentifier(t *testing.T) {
 		text   string
 		reader io.Reader
 		lexer  *Lexer
-		token  LexToken
-		eof    LexToken
+		token  Token
+		eof    Token
 	)
 
 	text = "agr8_name"
@@ -121,7 +121,7 @@ func TestString(t *testing.T) {
 		quoted string
 		reader io.Reader
 		lexer  *Lexer
-		token  LexToken
+		token  Token
 	)
 
 	text = "single quoted"
@@ -218,8 +218,8 @@ func TestCharacterRange(t *testing.T) {
 		text   string
 		reader io.Reader
 		lexer  *Lexer
-		token  LexToken
-		//		eof    LexToken
+		token  Token
+		//		eof    Token
 	)
 
 	text = "[A]"
@@ -462,6 +462,17 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, text, token.String())
 	assert.Equal(t, map[rune]bool{'-': true, '.': true, '/': true, '0': true, '2': true}, token.Range())
 
+	text = "[^]"
+	reader = strings.NewReader(text)
+	lexer = NewLexer(reader)
+	token = lexer.Next()
+
+	assert.Equal(t, CharacterRange, token.Type())
+	assert.Equal(t, text, token.Token())
+	assert.Equal(t, text, token.String())
+	assert.True(t, token.InvertedRange())
+	assert.Equal(t, map[rune]bool{}, token.Range())
+
 	func() {
 		defer func() {
 			assert.Equal(t, ErrInvalidCharacterRangeEscape, recover())
@@ -521,6 +532,18 @@ func TestCharacterRange(t *testing.T) {
 		token = lexer.Next()
 		assert.Fail(t, "Must panic with range out of order error")
 	}()
+
+	func() {
+		defer func() {
+			assert.Equal(t, ErrInvalidCharacterRangeEscape, recover())
+		}()
+
+		text = "[\\']"
+		reader = strings.NewReader(text)
+		lexer = NewLexer(reader)
+		token = lexer.Next()
+		assert.Fail(t, "Must panic with invalid character range escape error")
+	}()
 }
 
 func TestRepetition(t *testing.T) {
@@ -528,7 +551,7 @@ func TestRepetition(t *testing.T) {
 		text   string
 		reader io.Reader
 		lexer  *Lexer
-		token  LexToken
+		token  Token
 		n      int
 		m      int
 	)
@@ -663,7 +686,7 @@ func TestOptions(t *testing.T) {
 		text   string
 		reader io.Reader
 		lexer  *Lexer
-		token  LexToken
+		token  Token
 	)
 
 	text = ":AST :EOL:INDENT :OUTDENT "
@@ -703,7 +726,7 @@ func TestSymbols(t *testing.T) {
 		text   string
 		reader io.Reader
 		lexer  *Lexer
-		token  LexToken
+		token  Token
 	)
 
 	text = "()|,=;"

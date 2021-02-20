@@ -41,7 +41,7 @@ func (t LexType) String() string {
 	return optionStrings[uint(t)-uint(OptionAST)]
 }
 
-// error message constants
+// Error message constants
 const (
 	ErrUnexpectedEOF               = "Unexpected EOF"
 	ErrInvalidComment              = "A comment either be on one line after a //, or all chars between /* and */"
@@ -54,34 +54,41 @@ const (
 	ErrInvalidOption               = "The only valid options are :AST, :EOL, :INDENT, and :OUTDENT"
 )
 
-// LexToken is a single lexical token
-type LexToken struct {
-	typ            LexType
-	token          string        // string form of token
-	formattedToken string        // formatted token
-	charRange      map[rune]bool // character range
-	n, m           int           // repetitions
+// Token is a single lexical token
+type Token struct {
+	typ               LexType
+	token             string        // string form of token
+	formattedToken    string        // formatted token
+	charRangeInverted bool          // inverted character range
+	charRange         map[rune]bool // character range
+	n, m              int           // repetitions
 
 }
 
 // Type is the lexical token type
-func (l LexToken) Type() LexType {
+func (l Token) Type() LexType {
 	return l.typ
 }
 
 // Token returns unformatted token
-func (l LexToken) Token() string {
+func (l Token) Token() string {
 	return l.token
 }
 
 // String is the fmt.Stringer method that returns formatted token
-func (l LexToken) String() string {
+func (l Token) String() string {
 	return l.formattedToken
+}
+
+// InvertedRange returns true if the character range is inverted
+// Only applicable if Type() returns CharacterRange
+func (l Token) InvertedRange() bool {
+	return l.charRangeInverted
 }
 
 // Range returns the character range
 // Only applicable if Type() returns CharacterRange
-func (l LexToken) Range() map[rune]bool {
+func (l Token) Range() map[rune]bool {
 	return l.charRange
 }
 
@@ -91,7 +98,7 @@ func (l LexToken) Range() map[rune]bool {
 // Returns 0, n if specified as {,N}
 // Returns n, m if specified as {N,M}
 // Only applicable if Type() returns Repetition
-func (l LexToken) Repetitions() (n, m int) {
+func (l Token) Repetitions() (n, m int) {
 	return l.n, l.m
 }
 
@@ -115,7 +122,7 @@ func NewLexer(source io.Reader) *Lexer {
 }
 
 // Next reads next lexical token, choosing longest possible sequence
-func (l *Lexer) Next() LexToken {
+func (l *Lexer) Next() Token {
 	var (
 		lastReadCR               bool
 		typ                      LexType
@@ -124,6 +131,7 @@ func (l *Lexer) Next() LexToken {
 		commentState             int           // 0 = initial /, 1 = single line, 2 = multiline looking for *, 3 = multiline trailing /
 		doubleQuotes             bool          // true = double quoted String, false = single quoted String
 		rangeState               int           // 0 = initial, 1 = begin, 2 = range, 3 = after end
+		rangeInverted            bool          // true if range beegins with ^
 		rangeBegin               rune          // begin and end chars of a single range
 		rangeChars               map[rune]bool // map of all chars in a range
 		repetitionState          bool          // false = N, true = M
@@ -132,7 +140,7 @@ func (l *Lexer) Next() LexToken {
 		nextCharText             string
 		nextCharEscaped          bool
 		err                      error
-		result                   LexToken
+		result                   Token
 	)
 
 	// Handle escape sequences
@@ -211,7 +219,7 @@ MAIN_LOOP:
 		// EOF only valid if read after a complete token
 		if err == io.EOF {
 			if typ == InvalidLexType {
-				result = LexToken{
+				result = Token{
 					typ:   EOF,
 					token: "",
 				}
@@ -281,6 +289,7 @@ MAIN_LOOP:
 				token.WriteRune(nextChar)
 				formattedToken.WriteRune(nextChar)
 				rangeState = 0
+				rangeInverted = false
 				rangeChars = map[rune]bool{}
 				continue MAIN_LOOP
 
@@ -295,7 +304,7 @@ MAIN_LOOP:
 
 			case '?':
 				// zero or one repetitions - same as {0,1}
-				result = LexToken{
+				result = Token{
 					typ:            Repetition,
 					token:          "?",
 					formattedToken: "?",
@@ -306,7 +315,7 @@ MAIN_LOOP:
 
 			case '*':
 				// zero or more repetitions - same as {0,}
-				result = LexToken{
+				result = Token{
 					typ:            Repetition,
 					token:          "*",
 					formattedToken: "*",
@@ -317,7 +326,7 @@ MAIN_LOOP:
 
 			case '+':
 				// one or more repetitions - same as {1,}
-				result = LexToken{
+				result = Token{
 					typ:            Repetition,
 					token:          "+",
 					formattedToken: "+",
@@ -333,7 +342,7 @@ MAIN_LOOP:
 				continue MAIN_LOOP
 
 			case '(':
-				result = LexToken{
+				result = Token{
 					typ:            OpenParens,
 					token:          "(",
 					formattedToken: "(",
@@ -341,7 +350,7 @@ MAIN_LOOP:
 				break MAIN_LOOP
 
 			case ')':
-				result = LexToken{
+				result = Token{
 					typ:            CloseParens,
 					token:          ")",
 					formattedToken: ")",
@@ -349,7 +358,7 @@ MAIN_LOOP:
 				break MAIN_LOOP
 
 			case '|':
-				result = LexToken{
+				result = Token{
 					typ:            Bar,
 					token:          "|",
 					formattedToken: "|",
@@ -357,7 +366,7 @@ MAIN_LOOP:
 				break MAIN_LOOP
 
 			case ',':
-				result = LexToken{
+				result = Token{
 					typ:            Comma,
 					token:          ",",
 					formattedToken: ",",
@@ -365,7 +374,7 @@ MAIN_LOOP:
 				break MAIN_LOOP
 
 			case '=':
-				result = LexToken{
+				result = Token{
 					typ:            Equals,
 					token:          "=",
 					formattedToken: "=",
@@ -373,7 +382,7 @@ MAIN_LOOP:
 				break MAIN_LOOP
 
 			case ';':
-				result = LexToken{
+				result = Token{
 					typ:            SemiColon,
 					token:          ";",
 					formattedToken: ";",
@@ -397,7 +406,7 @@ MAIN_LOOP:
 			l.reader.UnreadRune()
 
 			// Identifier is what we have before this char
-			result = LexToken{
+			result = Token{
 				typ:            typ,
 				token:          token.String(),
 				formattedToken: formattedToken.String(),
@@ -426,7 +435,7 @@ MAIN_LOOP:
 				// single line
 				if (nextChar == '\r') || (nextChar == '\n') {
 					// No need to push back eol char, don't need to consume more eol chars
-					result = LexToken{
+					result = Token{
 						typ:            typ,
 						token:          token.String(),
 						formattedToken: formattedToken.String(),
@@ -454,7 +463,7 @@ MAIN_LOOP:
 			default:
 				// multiline looking for / after *
 				if nextChar == '/' {
-					result = LexToken{
+					result = Token{
 						typ:            typ,
 						token:          token.String(),
 						formattedToken: formattedToken.String(),
@@ -482,7 +491,7 @@ MAIN_LOOP:
 				((!doubleQuotes) && (nextChar == '\'') && (!nextCharEscaped)) {
 				// Allow zero length terminals, they mean epsilon
 				formattedToken.WriteRune(nextChar)
-				result = LexToken{
+				result = Token{
 					typ:            typ,
 					token:          token.String(),
 					formattedToken: formattedToken.String(),
@@ -505,44 +514,65 @@ MAIN_LOOP:
 			//
 			// where ClassRanges is the entire set of range(s) contained in square brackets;
 			// and a range specification is a sequence of a character, a dash, and a character.
+			//
+			// Note that if the trange begins with ^-. the dash is literal.
 
 			// Escapes may be used in character ranges
 			handleEscapes(false)
 
 			switch rangeState {
 			case 0: // First char
+				token.WriteString(nextCharText)
+				formattedToken.WriteString(nextCharText)
+
 				if (nextChar == ']') && (!nextCharEscaped) {
+					if rangeInverted {
+						// Valid range of not nothing = everything
+						// Dumb, but allowed
+						return Token{
+							typ:               typ,
+							token:             token.String(),
+							formattedToken:    formattedToken.String(),
+							charRangeInverted: true,
+							charRange:         rangeChars,
+						}
+					}
+
 					panic(ErrCharacterRangeEmpty)
 				}
 
+				if nextChar == '^' {
+					// Starts with ^, so invert the range
+					rangeInverted = true
+					continue MAIN_LOOP
+				}
+
 				// This may be range begin
-				token.WriteString(nextCharText)
-				formattedToken.WriteString(nextCharText)
 				rangeState = 1
 				rangeBegin = nextChar
 				continue MAIN_LOOP
 
 			case 1: // Possible range begin
+				token.WriteString(nextCharText)
+				formattedToken.WriteString(nextCharText)
+
 				if (nextChar == ']') && (!nextCharEscaped) {
 					// last char in rangeBegin is a literal char
-					token.WriteString(nextCharText)
-					formattedToken.WriteString(nextCharText)
 					rangeChars[rangeBegin] = true
-					return LexToken{
-						typ:            typ,
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
-						charRange:      rangeChars,
+					return Token{
+						typ:               typ,
+						token:             token.String(),
+						formattedToken:    formattedToken.String(),
+						charRangeInverted: rangeInverted,
+						charRange:         rangeChars,
 					}
 				}
 
-				token.WriteString(nextCharText)
-				formattedToken.WriteString(nextCharText)
 				if nextChar == '-' {
 					// Possible range of chars
 					rangeState = 2
 				} else {
-					// Last char ius not part of range
+					// Last char is not part of range
 					rangeChars[rangeBegin] = true
 					// But this one might bee
 					rangeBegin = nextChar
@@ -557,11 +587,12 @@ MAIN_LOOP:
 					formattedToken.WriteString(nextCharText)
 					rangeChars[rangeBegin] = true
 					rangeChars['-'] = true
-					return LexToken{
-						typ:            typ,
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
-						charRange:      rangeChars,
+					return Token{
+						typ:               typ,
+						token:             token.String(),
+						formattedToken:    formattedToken.String(),
+						charRangeInverted: rangeInverted,
+						charRange:         rangeChars,
 					}
 				}
 
@@ -585,7 +616,7 @@ MAIN_LOOP:
 				if (nextChar == ']') && (!nextCharEscaped) {
 					token.WriteString(nextCharText)
 					formattedToken.WriteString(nextCharText)
-					return LexToken{
+					return Token{
 						typ:            typ,
 						token:          token.String(),
 						formattedToken: formattedToken.String(),
@@ -636,7 +667,7 @@ MAIN_LOOP:
 						panic(ErrRepetitionForm)
 					}
 
-					result = LexToken{
+					result = Token{
 						typ:            typ,
 						token:          token.String(),
 						formattedToken: formattedToken.String(),
@@ -683,7 +714,7 @@ MAIN_LOOP:
 						repetitionN = 0
 					}
 
-					result = LexToken{
+					result = Token{
 						typ:            typ,
 						token:          token.String(),
 						formattedToken: formattedToken.String(),
@@ -712,7 +743,7 @@ MAIN_LOOP:
 			tokenStr := token.String()
 			for i, optionStr := range optionStrings {
 				if tokenStr == optionStr {
-					result = LexToken{
+					result = Token{
 						typ:            LexType(int(OptionAST) + i),
 						token:          token.String(),
 						formattedToken: formattedToken.String(),
