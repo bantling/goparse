@@ -1,10 +1,10 @@
 package lexer
 
 import (
-	"bytes"
 	"io"
-	"io/ioutil"
 	"strings"
+
+	"github.com/bantling/goiter"
 )
 
 // LexType is the type of a lexical token
@@ -31,9 +31,45 @@ const (
 	EOF
 )
 
-// map of valid options strings
 var (
+	// map of valid options strings
 	optionStrings = []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
+
+	// map of useless ASCII control characters
+	uselessChars = map[rune]bool{
+		'\x00': true,
+		'\x01': true,
+		'\x02': true,
+		'\x03': true,
+		'\x04': true,
+		'\x05': true,
+		'\x06': true,
+		'\x07': true,
+		'\x08': true,
+		// '\x09' is tab
+		// '\x0A' is newline
+		'\x0B': true,
+		'\x0C': true,
+		// '\x0D' is return carriage
+		'\x0E': true,
+		'\x0F': true,
+		'\x10': true,
+		'\x11': true,
+		'\x12': true,
+		'\x13': true,
+		'\x14': true,
+		'\x15': true,
+		'\x16': true,
+		'\x17': true,
+		'\x18': true,
+		'\x19': true,
+		'\x1A': true,
+		'\x1B': true,
+		'\x1C': true,
+		'\x1D': true,
+		'\x1E': true,
+		'\x1F': true,
+	}
 )
 
 // String is a formatted string for a LexType
@@ -46,8 +82,9 @@ const (
 	ErrUnexpectedEOF               = "Unexpected EOF"
 	ErrInvalidComment              = "A comment either be on one line after a //, or all chars between /* and */"
 	ErrUnexpectedChar              = "Unexpected character"
-	ErrInvalidStringEscape         = "The only valid string escape sequences are \\\\, \\t, \\r, \\n, \\', and \\\""
-	ErrInvalidCharacterRangeEscape = "The only valid character range escape sequences are \\\\, \\t, \\r, \\n, and \\]"
+	ErrInvalidUnicodeEscape        = `A unicode escape must be \uXXXX or \U+XXXX where X is a hex character`
+	ErrInvalidStringEscape         = `The only valid string escape sequences are \\, \t, \r, \n, \uXXXX, \U+XXXX, \', and \"`
+	ErrInvalidCharacterRangeEscape = `The only valid character range escape sequences are \\, \t, \r, \n, \uXXXX, \U+XXXX, and \]`
 	ErrCharacterRangeEmpty         = "A character range cannot be empty"
 	ErrCharacterRangeOutOfOrder    = "A character range must be in order, where begin character <= last character"
 	ErrRepetitionForm              = "A repetition must be of one of the following forms: {N} or {N,} or {,N} or {N,M}; where N and M are integers, when M present N <= M, when using form {N} N must be > 0"
@@ -104,19 +141,14 @@ func (l Token) Repetitions() (n, m int) {
 
 // Lexer is the lexical analyzer that returns lexical tokens from input
 type Lexer struct {
-	reader     io.RuneScanner
+	iter       *goiter.Iter
 	lineNumber int
 }
 
 // NewLexer constructs a Lexer from an io.Reader
 func NewLexer(source io.Reader) *Lexer {
-	buf, err := ioutil.ReadAll(source)
-	if err != nil {
-		panic(err)
-	}
-
 	return &Lexer{
-		reader:     bytes.NewReader(buf),
+		iter:       goiter.OfReaderRunes(source),
 		lineNumber: 1,
 	}
 }
@@ -139,7 +171,6 @@ func (l *Lexer) Next() Token {
 		nextChar                 rune
 		nextCharText             string
 		nextCharEscaped          bool
-		err                      error
 		result                   Token
 	)
 
@@ -154,14 +185,14 @@ func (l *Lexer) Next() Token {
 			nextCharEscaped = true
 
 			// Read next char
-			nextChar, _, err = l.reader.ReadRune()
-			if err == io.EOF {
+			if !l.iter.Next() {
 				panic(ErrUnexpectedEOF)
 			}
+			nextChar = l.iter.RuneValue()
 
 			doPanic := false
 
-			// Common cases are \, t, r, or n
+			// Common cases are \, t, r, n, and U
 			switch nextChar {
 			case '\\':
 				nextCharText = "\\\\"
@@ -213,11 +244,8 @@ func (l *Lexer) Next() Token {
 
 MAIN_LOOP:
 	for true {
-		nextChar, _, err = l.reader.ReadRune()
-		nextCharText = string(nextChar)
-
 		// EOF only valid if read after a complete token
-		if err == io.EOF {
+		if !l.iter.Next() {
 			if typ == InvalidLexType {
 				result = Token{
 					typ:   EOF,
@@ -227,6 +255,9 @@ MAIN_LOOP:
 			}
 			panic(ErrUnexpectedEOF)
 		}
+
+		nextChar = l.iter.RuneValue()
+		nextCharText = string(nextChar)
 
 		switch typ {
 		// First character of next token
@@ -403,7 +434,7 @@ MAIN_LOOP:
 			}
 
 			// Must be first char of next token
-			l.reader.UnreadRune()
+			l.iter.Unread(nextChar)
 
 			// Identifier is what we have before this char
 			result = Token{
@@ -525,26 +556,28 @@ MAIN_LOOP:
 				token.WriteString(nextCharText)
 				formattedToken.WriteString(nextCharText)
 
+				// If nextChar is ^ and range is already inverted, must be ^^, where second ^ is literal, and is part of range
+				if (nextChar == '^') && (!rangeInverted) {
+					// Starts with ^, so invert the range
+					// Always exclude useless ASCII conntrol characters
+					rangeInverted = true
+					rangeChars = uselessChars
+					continue MAIN_LOOP
+				}
+
 				if (nextChar == ']') && (!nextCharEscaped) {
 					if rangeInverted {
-						// Valid range of not nothing = everything
+						// Valid range of not nothing = everything; we already excluded useless ASCII control characters above
 						return Token{
 							typ:               typ,
 							token:             token.String(),
 							formattedToken:    formattedToken.String(),
-							charRangeInverted: true,
+							charRangeInverted: rangeInverted,
 							charRange:         rangeChars,
 						}
 					}
 
 					panic(ErrCharacterRangeEmpty)
-				}
-
-				if (nextChar == '^') && (!rangeInverted) {
-					// Starts with ^, so invert the range
-					// If range is already inverted, must be ^^, where second ^ is literal, and may be part of range
-					rangeInverted = true
-					continue MAIN_LOOP
 				}
 
 				// This may be range begin
@@ -614,13 +647,16 @@ MAIN_LOOP:
 			case 3:
 				// after range end
 				if (nextChar == ']') && (!nextCharEscaped) {
+					//					if true {
+					//						panic("here")
+					//					}
 					token.WriteString(nextCharText)
 					formattedToken.WriteString(nextCharText)
 					return Token{
 						typ:               typ,
 						token:             token.String(),
 						formattedToken:    formattedToken.String(),
-						charRangeInverted: true,
+						charRangeInverted: rangeInverted,
 						charRange:         rangeChars,
 					}
 				}
@@ -738,7 +774,7 @@ MAIN_LOOP:
 			}
 
 			// Must be first char of next token
-			l.reader.UnreadRune()
+			l.iter.Unread(nextChar)
 
 			// String must match a value optionStrings
 			tokenStr := token.String()

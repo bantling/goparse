@@ -11,9 +11,14 @@ Productions are specified as Extended Backus-Naur Form (see https://en.wikipedia
 The EBNF syntax varies from the one described by making it more like the regular expression syntax programmers are used to,
 and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form).
 
+. Character set
+.. UTF8 encoding is expected
+.. ASCII control characters other than tab, carriage return, and newline are useless
+.. There are no escapes for useless ASCII control characters, only \t, \r, and \n
+.. There are no \xXX or \uXXXX escapes, as all editors can handle unicode
 . Terminals are one more single or double-quoted strings and/or square bracket character ranges
 . A character range is interpreted as follows:
-.. If the first character is ^ it means the range is all characters except the ranges that follow
+.. If the first character is ^ it means the range is all unicode characters except uselesss ASCII control characters and the ranges that follow
 .. In any other position a ^ is a literal character
 .. A sequence of X-Y indicates a closed range of characters from X through Y
 .. A - is a literal character in the following circumstances:
@@ -21,11 +26,12 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 ... It is the last character
 ... It immediately follows a range (eg, A-Z- means A thru Z and -)
 .. Since there is no escape sequence for ^ or -, if they are to be included literally, they must be placed in a position that makes them literal 
-. The following sequences in a string or character range have their usual meaning: \\, \t, \r, \n
+. The following sequences in a string or character range have their usual meaning: \\, \t, \r, \n  
 .. Inside a terminal string, both single and double quotes can be escaped
 .. Inside a character range, a closing square bracket can be escaped
 . A list contains one or more nonterminal names and/or terminals  
 . A group is a list enclosed in round brackets, or a single list item without round brackets
+. A group of terminals only may be preceded by a ^ to indicate that the terminals represent characters that are not part of token, but indicate the end of the token.
 . A production is a group that may be followed by the number of repetitions:
 .. ? for 0 or 1 repetitions
 .. * for 0 or more repetitions
@@ -36,10 +42,9 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 .. {N,M} for at least N and at most M repetitions, where N ≥ 0, M ≥ N and if N = 0 then M ≥ 1
 . A nonterminal name is a letter followed by letters, digits, and dashes
 . A rule is a nonterminal name, an equals sign, and a vertical bar seperated list of productions
+.. A double equals can be used to indicate that this rule is whitespace significant
 . A nonterminal may be recursive by having one or more productions containing the nonterminal name
 . A terminal string cannot be empty
-. Builtin terminals
-.. non-escape-char: all UTF-8 chars except ASCII control chars and backslash
 . Comments
 .. Single line starting with // and ending with any EOL sequence
 .. Mutiline starting with /* and ending with with */
@@ -54,14 +59,14 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 .. A pretty printer to be created simply by parsing and calling the String() method of root node.
 
 This variant of EBNF can be described in its own rules as follows:
+all UTF-8 chars except ASCII control chars and backslash
 ....
-// Note that comment-oneline consumes the eol, but the eol is not part of the comment
-comment-oneline = "//" non-escape-char* ("\r" | "\n" | "\r\n")
+non-escape-char = [^\\]
+comment-oneline == "//" non-escape-char* ^("\r" | "\n" | "\r\n")
 comment-multiline = "/*" non-escape-char* "*/"
 comment = comment-oneline | comment-multiline 
 
 general-escape = "\\" | "\t" | "\r" | "\n"
-
 string-escape = general-escape | "\'" | '\"'
 string-char = non-escape-char | string-escape
 string = "'" string-char+ "'" | '"' string-char+ '"'
@@ -80,12 +85,13 @@ repetition =
 terminal = (string | range)+
 identifier = [A-Za-z][A-Za-z0-9-]*
 
-expression-part = terminal | identifier
+inverted-terminals = "^" (terminal | "(" terminal+ ")")
+expression-part = terminal | inverted-terminals | identifier
 expression = (expression-part+ | "(" expression-part+ ")") repetition?
  
 production = expression+  
 productions = production ("|" production)*
-nonterminal = identifier "=" productions ";"
+nonterminal = identifier ("=" | "==") productions ";"
 
 grammar = nonterminal+
 ....

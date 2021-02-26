@@ -1,0 +1,3 @@
+- Track line number and char position for errors
+- Change name of the Of methods to use New, since they return pointers
+  - Do same for streams

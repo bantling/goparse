@@ -222,6 +222,16 @@ func TestCharacterRange(t *testing.T) {
 		//		eof    Token
 	)
 
+	charsMap := func(chars ...rune) map[rune]bool {
+		result := map[rune]bool{}
+
+		for _, char := range chars {
+			result[char] = true
+		}
+
+		return result
+	}
+
 	text = "[A]"
 	reader = strings.NewReader(text)
 	lexer = NewLexer(reader)
@@ -230,7 +240,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'A': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('A'), token.Range())
 
 	text = "[AB]"
 	reader = strings.NewReader(text)
@@ -240,7 +251,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'A': true, 'B': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('A', 'B'), token.Range())
 
 	text = "[ABC]"
 	reader = strings.NewReader(text)
@@ -250,7 +262,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'A': true, 'B': true, 'C': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('A', 'B', 'C'), token.Range())
 
 	text = "[-]"
 	reader = strings.NewReader(text)
@@ -260,7 +273,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-'), token.Range())
 
 	text = "[-A]"
 	reader = strings.NewReader(text)
@@ -270,7 +284,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, 'A': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', 'A'), token.Range())
 
 	text = "[A-]"
 	reader = strings.NewReader(text)
@@ -280,7 +295,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, 'A': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', 'A'), token.Range())
 
 	text = "[A-C]"
 	reader = strings.NewReader(text)
@@ -290,7 +306,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'A': true, 'B': true, 'C': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('A', 'B', 'C'), token.Range())
 
 	text = "[-A-C]"
 	reader = strings.NewReader(text)
@@ -300,7 +317,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, 'A': true, 'B': true, 'C': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', 'A', 'B', 'C'), token.Range())
 
 	text = "[A-C-]"
 	reader = strings.NewReader(text)
@@ -310,7 +328,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, 'A': true, 'B': true, 'C': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', 'A', 'B', 'C'), token.Range())
 
 	text = "[-A-C-]"
 	reader = strings.NewReader(text)
@@ -320,7 +339,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, 'A': true, 'B': true, 'C': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', 'A', 'B', 'C'), token.Range())
 
 	text = "[A-CE-G]"
 	reader = strings.NewReader(text)
@@ -330,7 +350,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'A': true, 'B': true, 'C': true, 'E': true, 'F': true, 'G': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('A', 'B', 'C', 'E', 'F', 'G'), token.Range())
 
 	text = "[A-CZE-G]"
 	reader = strings.NewReader(text)
@@ -340,7 +361,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'A': true, 'B': true, 'C': true, 'E': true, 'F': true, 'G': true, 'Z': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('A', 'B', 'C', 'E', 'F', 'G', 'Z'), token.Range())
 
 	text = "[[]"
 	reader = strings.NewReader(text)
@@ -350,7 +372,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'[': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('['), token.Range())
 
 	text = "[\\\\\\t\\r\\n\\]]"
 	reader = strings.NewReader(text)
@@ -360,7 +383,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'\\': true, '\t': true, '\r': true, '\n': true, ']': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('\\', '\t', '\r', '\n', ']'), token.Range())
 
 	text = "[-]"
 	reader = strings.NewReader(text)
@@ -370,7 +394,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-'), token.Range())
 
 	text = "[--]"
 	reader = strings.NewReader(text)
@@ -380,7 +405,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-'), token.Range())
 
 	text = "[---]"
 	reader = strings.NewReader(text)
@@ -390,7 +416,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-'), token.Range())
 
 	text = "[--0]"
 	reader = strings.NewReader(text)
@@ -400,7 +427,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, '.': true, '/': true, '0': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', '.', '/', '0'), token.Range())
 
 	text = "[---0]"
 	reader = strings.NewReader(text)
@@ -410,7 +438,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, '0': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', '0'), token.Range())
 
 	text = "[----0]"
 	reader = strings.NewReader(text)
@@ -420,7 +449,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, '0': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', '0'), token.Range())
 
 	text = "[---0-]"
 	reader = strings.NewReader(text)
@@ -430,7 +460,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, '0': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', '0'), token.Range())
 
 	text = "[---0-2]"
 	reader = strings.NewReader(text)
@@ -440,7 +471,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, '0': true, '1': true, '2': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', '0', '1', '2'), token.Range())
 
 	text = "[----0-2]"
 	reader = strings.NewReader(text)
@@ -450,7 +482,8 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, '0': true, '1': true, '2': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', '0', '1', '2'), token.Range())
 
 	text = "[-----0-2]"
 	reader = strings.NewReader(text)
@@ -460,7 +493,22 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, CharacterRange, token.Type())
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
-	assert.Equal(t, map[rune]bool{'-': true, '.': true, '/': true, '0': true, '2': true}, token.Range())
+	assert.False(t, token.InvertedRange())
+	assert.Equal(t, charsMap('-', '.', '/', '0', '2'), token.Range())
+
+	invertedCharsMap := func(chars ...rune) map[rune]bool {
+		result := map[rune]bool{}
+
+		for k, v := range uselessChars {
+			result[k] = v
+		}
+
+		for _, char := range chars {
+			result[char] = true
+		}
+
+		return result
+	}
 
 	text = "[^]"
 	reader = strings.NewReader(text)
@@ -471,7 +519,7 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
 	assert.True(t, token.InvertedRange())
-	assert.Equal(t, map[rune]bool{}, token.Range())
+	assert.Equal(t, invertedCharsMap(), token.Range())
 
 	text = "[^A]"
 	reader = strings.NewReader(text)
@@ -482,7 +530,7 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
 	assert.True(t, token.InvertedRange())
-	assert.Equal(t, map[rune]bool{'A': true}, token.Range())
+	assert.Equal(t, invertedCharsMap('A'), token.Range())
 
 	text = "[^-A]"
 	reader = strings.NewReader(text)
@@ -493,7 +541,7 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
 	assert.True(t, token.InvertedRange())
-	assert.Equal(t, map[rune]bool{'-': true, 'A': true}, token.Range())
+	assert.Equal(t, invertedCharsMap('-', 'A'), token.Range())
 
 	text = "[^^]"
 	reader = strings.NewReader(text)
@@ -504,7 +552,7 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
 	assert.True(t, token.InvertedRange())
-	assert.Equal(t, map[rune]bool{'^': true}, token.Range())
+	assert.Equal(t, invertedCharsMap('^'), token.Range())
 
 	text = "[^^-a]"
 	reader = strings.NewReader(text)
@@ -515,7 +563,7 @@ func TestCharacterRange(t *testing.T) {
 	assert.Equal(t, text, token.Token())
 	assert.Equal(t, text, token.String())
 	assert.True(t, token.InvertedRange())
-	assert.Equal(t, map[rune]bool{'^': true, '_': true, '`': true, 'a': true}, token.Range())
+	assert.Equal(t, invertedCharsMap('^', '_', '`', 'a'), token.Range())
 
 	func() {
 		defer func() {
