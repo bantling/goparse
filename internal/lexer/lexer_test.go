@@ -815,22 +815,24 @@ func TestOptions(t *testing.T) {
 
 func TestSymbols(t *testing.T) {
 	var (
-		text   string
-		reader io.Reader
-		lexer  *Lexer
-		token  Token
+		text    string
+		symbols []string
+		reader  io.Reader
+		lexer   *Lexer
+		token   Token
 	)
 
-	text = "()|,=;"
+	text = "^()|,===;"
+	symbols = []string{"^", "(", ")", "|", ",", "==", "=", ";"}
 	reader = strings.NewReader(text)
 	lexer = NewLexer(reader)
 
-	types := []LexType{OpenParens, CloseParens, Bar, Comma, Equals, SemiColon}
-	for i, symbol := range []rune(text) {
+	types := []LexType{Hat, OpenParens, CloseParens, Bar, Comma, DoubleEquals, Equals, SemiColon}
+	for i, symbol := range symbols {
 		token = lexer.Next()
 		assert.Equal(t, types[i], token.Type())
-		assert.Equal(t, string(symbol), token.Token())
-		assert.Equal(t, string(symbol), token.String())
+		assert.Equal(t, symbol, token.Token())
+		assert.Equal(t, symbol, token.String())
 	}
 
 	eof := lexer.Next()

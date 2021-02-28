@@ -16,6 +16,7 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 .. ASCII control characters other than tab, carriage return, and newline are useless
 .. There are no escapes for useless ASCII control characters, only \t, \r, and \n
 .. There are no \xXX or \uXXXX escapes, as all editors can handle unicode
+.. This means that the set of allowable characters is [\t\r\n -~,\u0080-]
 . Terminals are one more single or double-quoted strings and/or square bracket character ranges
 . A character range is interpreted as follows:
 .. If the first character is ^ it means the range is all unicode characters except uselesss ASCII control characters and the ranges that follow
@@ -31,7 +32,9 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 .. Inside a character range, a closing square bracket can be escaped
 . A list contains one or more nonterminal names and/or terminals  
 . A group is a list enclosed in round brackets, or a single list item without round brackets
-. A group of terminals only may be preceded by a ^ to indicate that the terminals represent characters that are not part of token, but indicate the end of the token.
+. A single terminal or group of terminals only may be preceded by a ^ to indicate that the terminals represent literal sequences that are not part of token, but indicate the end of the token.
+.. If no grouping is used, the ^ only applies to the immediately following terminal
+.. The ^ cannot precede the first terminal of a rule
 . A production is a group that may be followed by the number of repetitions:
 .. ? for 0 or 1 repetitions
 .. * for 0 or more repetitions
@@ -52,14 +55,13 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 . Pretty printing
 .. Affects only the String() method of each node
 .. A rule name or terminal in a rule definition may be followed by:
-... :EOL to add a newline
+... :EOL to add a newline and current identation
 ... :INDENT to increase indent by 4 spaces
 ... :OUTDENT to decrease indent by 4 spaces
 ... May be combined like :EOL:INDENT or :EOL :OUTDENT
 .. A pretty printer to be created simply by parsing and calling the String() method of root node.
 
 This variant of EBNF can be described in its own rules as follows:
-all UTF-8 chars except ASCII control chars and backslash
 ....
 non-escape-char = [^\\]
 comment-oneline == "//" non-escape-char* ^("\r" | "\n" | "\r\n")
@@ -85,12 +87,13 @@ repetition =
 terminal = (string | range)+
 identifier = [A-Za-z][A-Za-z0-9-]*
 
-inverted-terminals = "^" (terminal | "(" terminal+ ")")
-expression-part = terminal | inverted-terminals | identifier
-expression = (expression-part+ | "(" expression-part+ ")") repetition?
+terminals = terminal | "(" terminal ("|" terminal)* ")"
+inverted-terminals = "^" terminals
+expression-part = terminal | identifier
+expression = inverted-terminals | (expression-part+ | "(" expression-part+ ")") repetition?
  
 production = expression+  
-productions = production ("|" production)*
+productions = production ("|":EOL:OUTDENT:INDENT production)*
 nonterminal = identifier ("=" | "==") productions ";"
 
 grammar = nonterminal+

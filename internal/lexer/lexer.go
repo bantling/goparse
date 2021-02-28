@@ -22,11 +22,13 @@ const (
 	OptionEOL
 	OptionIndent
 	OptionOutdent
+	Hat
 	OpenParens
 	CloseParens
 	Bar
 	Comma
 	Equals
+	DoubleEquals
 	SemiColon
 	EOF
 )
@@ -69,6 +71,8 @@ var (
 		'\x1D': true,
 		'\x1E': true,
 		'\x1F': true,
+		// \x7F is DEL
+		'\x7F': true,
 	}
 )
 
@@ -372,6 +376,14 @@ MAIN_LOOP:
 				formattedToken.WriteRune(nextChar)
 				continue MAIN_LOOP
 
+			case '^':
+				result = Token{
+					typ:            Hat,
+					token:          "^",
+					formattedToken: "^",
+				}
+				break MAIN_LOOP
+
 			case '(':
 				result = Token{
 					typ:            OpenParens,
@@ -405,6 +417,23 @@ MAIN_LOOP:
 				break MAIN_LOOP
 
 			case '=':
+				// If next char is also =, then it is DoubleEquals
+				if !l.iter.Next() {
+					panic(ErrUnexpectedEOF)
+				}
+
+				if nextChar = l.iter.RuneValue(); nextChar == '=' {
+					result = Token{
+						typ:            DoubleEquals,
+						token:          "==",
+						formattedToken: "==",
+					}
+					break MAIN_LOOP
+				}
+
+				// Char after = is first char of next token
+				l.iter.Unread(nextChar)
+
 				result = Token{
 					typ:            Equals,
 					token:          "=",
