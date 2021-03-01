@@ -22,6 +22,9 @@ const (
 	OptionEOL
 	OptionIndent
 	OptionOutdent
+	OptionPreEOL
+	OptionPreIndent
+	OptionPreOutdent
 	Hat
 	OpenParens
 	CloseParens
@@ -35,7 +38,7 @@ const (
 
 var (
 	// map of valid options strings
-	optionStrings = []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
+	optionStrings = []string{":AST", ":EOL", ":INDENT", ":OUTDENT", ":PREEOL", ":PREINDENT", ":PREOUTDENT"}
 
 	// map of useless ASCII control characters
 	uselessChars = map[rune]bool{

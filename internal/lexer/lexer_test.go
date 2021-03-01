@@ -781,12 +781,12 @@ func TestOptions(t *testing.T) {
 		token  Token
 	)
 
-	text = ":AST :EOL:INDENT :OUTDENT "
+	text = ":AST :EOL:INDENT :OUTDENT :PREEOL :PREINDENT :PREOUTDENT "
 	reader = strings.NewReader(text)
 	lexer = NewLexer(reader)
 
-	options := []string{":AST", ":EOL", ":INDENT", ":OUTDENT"}
-	types := []LexType{OptionAST, OptionEOL, OptionIndent, OptionOutdent}
+	options := []string{":AST", ":EOL", ":INDENT", ":OUTDENT", ":PREEOL", ":PREINDENT", ":PREOUTDENT"}
+	types := []LexType{OptionAST, OptionEOL, OptionIndent, OptionOutdent, OptionPreEOL, OptionPreIndent, OptionPreOutdent}
 	for i, typ := range types {
 		token = lexer.Next()
 		assert.Equal(t, typ, token.Type())

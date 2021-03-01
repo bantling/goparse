@@ -59,6 +59,8 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 ... :INDENT to increase indent by 4 spaces
 ... :OUTDENT to decrease indent by 4 spaces
 ... May be combined like :EOL:INDENT or :EOL :OUTDENT
+... :PREEOL, :PREINDENT, and :PREOUTDENT can also be used to add whitespace before the terminal or rulename
+... Outdenting can never go below 0
 .. A pretty printer to be created simply by parsing and calling the String() method of root node.
 
 This variant of EBNF can be described in its own rules as follows:
@@ -93,7 +95,7 @@ expression-part = terminal | identifier
 expression = inverted-terminals | (expression-part+ | "(" expression-part+ ")") repetition?
  
 production = expression+  
-productions = production ("|":EOL:OUTDENT:INDENT production)*
+productions = production ("|":PREEOL:PREOUTDENT:PREINDENT production)*
 nonterminal = identifier ("=" | "==") productions ";"
 
 grammar = nonterminal+
