@@ -102,11 +102,12 @@ const (
 type Token struct {
 	typ               LexType
 	token             string        // string form of token
-	formattedToken    string        // formatted token
+	source            string        // formatted token
 	charRangeInverted bool          // inverted character range
 	charRange         map[rune]bool // character range
 	n, m              int           // repetitions
-
+	line              int           // first line number of token
+	position          int           // position of first character of token
 }
 
 // Type is the lexical token type
@@ -121,7 +122,17 @@ func (l Token) Token() string {
 
 // String is the fmt.Stringer method that returns formatted token
 func (l Token) String() string {
-	return l.formattedToken
+	return l.source
+}
+
+// Line returns the first line number of the token
+func (l Token) Line() int {
+	return l.line
+}
+
+// Position returns the position of the first character of the token
+func (l Token) Position() int {
+	return l.position
 }
 
 // InvertedRange returns true if the character range is inverted
@@ -148,25 +159,22 @@ func (l Token) Repetitions() (n, m int) {
 
 // Lexer is the lexical analyzer that returns lexical tokens from input
 type Lexer struct {
-	iter       *goiter.Iter
-	lineNumber int
+	iter *goiter.RunePositionIter
 }
 
 // NewLexer constructs a Lexer from an io.Reader
 func NewLexer(source io.Reader) *Lexer {
 	return &Lexer{
-		iter:       goiter.OfReaderRunes(source),
-		lineNumber: 1,
+		iter: goiter.NewRunePositionIter(source),
 	}
 }
 
 // Next reads next lexical token, choosing longest possible sequence
 func (l *Lexer) Next() Token {
 	var (
-		lastReadCR               bool
 		typ                      LexType
 		token                    strings.Builder
-		formattedToken           strings.Builder
+		source                   strings.Builder
 		commentState             int           // 0 = initial /, 1 = single line, 2 = multiline looking for *, 3 = multiline trailing /
 		doubleQuotes             bool          // true = double quoted String, false = single quoted String
 		rangeState               int           // 0 = initial, 1 = begin, 2 = range, 3 = after end
@@ -178,6 +186,8 @@ func (l *Lexer) Next() Token {
 		nextChar                 rune
 		nextCharText             string
 		nextCharEscaped          bool
+		line                     int
+		position                 int
 		result                   Token
 	)
 
@@ -195,7 +205,7 @@ func (l *Lexer) Next() Token {
 			if !l.iter.Next() {
 				panic(ErrUnexpectedEOF)
 			}
-			nextChar = l.iter.RuneValue()
+			nextChar = l.iter.Value()
 
 			doPanic := false
 
@@ -255,15 +265,17 @@ MAIN_LOOP:
 		if !l.iter.Next() {
 			if typ == InvalidLexType {
 				result = Token{
-					typ:   EOF,
-					token: "",
+					typ:      EOF,
+					token:    "",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 			}
 			panic(ErrUnexpectedEOF)
 		}
 
-		nextChar = l.iter.RuneValue()
+		nextChar = l.iter.Value()
 		nextCharText = string(nextChar)
 
 		switch typ {
@@ -272,35 +284,20 @@ MAIN_LOOP:
 			// Skip whitespace between tokens
 			if (nextChar == ' ') ||
 				(nextChar == '\t') ||
-				(nextChar == '\r') ||
 				(nextChar == '\n') {
-				// Handle line number counting
-				if nextChar == '\r' {
-					l.lineNumber++
-					lastReadCR = true // May be part of CRLF
-				} else if nextChar == '\n' {
-					if lastReadCR {
-						// CRLF, already incremented line number on CR
-						lastReadCR = false
-					} else {
-						// LF by itself
-						l.lineNumber++
-					}
-				} else {
-					// Space or tab, clear CR flag if set
-					lastReadCR = false
-				}
-
 				continue MAIN_LOOP
 			}
-			lastReadCR = false
+
+			// First non-ws char is first char of next token
+			line = l.iter.Line()
+			position = l.iter.Position()
 
 			// Letter is first char of an identifier
 			if ((nextChar >= 'A') && (nextChar <= 'Z')) ||
 				((nextChar >= 'a') && (nextChar <= 'z')) {
 				typ = Identifier
 				token.WriteRune(nextChar)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 				continue MAIN_LOOP
 			}
 
@@ -312,20 +309,20 @@ MAIN_LOOP:
 
 			case '"':
 				typ = String
-				formattedToken.WriteRune(nextChar)
+				source.WriteRune(nextChar)
 				doubleQuotes = true
 				continue MAIN_LOOP
 
 			case '\'':
 				typ = String
-				formattedToken.WriteRune(nextChar)
+				source.WriteRune(nextChar)
 				doubleQuotes = false
 				continue MAIN_LOOP
 
 			case '[':
 				typ = CharacterRange
 				token.WriteRune(nextChar)
-				formattedToken.WriteRune(nextChar)
+				source.WriteRune(nextChar)
 				rangeState = 0
 				rangeInverted = false
 				rangeChars = map[rune]bool{}
@@ -334,7 +331,7 @@ MAIN_LOOP:
 			case '{':
 				typ = Repetition
 				token.WriteRune(nextChar)
-				formattedToken.WriteRune(nextChar)
+				source.WriteRune(nextChar)
 				repetitionState = false // Start reading N
 				repetitionN = -1        // Must have at least one char
 				repetitionM = -1        // May not have an M
@@ -343,79 +340,95 @@ MAIN_LOOP:
 			case '?':
 				// zero or one repetitions - same as {0,1}
 				result = Token{
-					typ:            Repetition,
-					token:          "?",
-					formattedToken: "?",
-					n:              0,
-					m:              1,
+					typ:      Repetition,
+					token:    "?",
+					source:   "?",
+					n:        0,
+					m:        1,
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case '*':
 				// zero or more repetitions - same as {0,}
 				result = Token{
-					typ:            Repetition,
-					token:          "*",
-					formattedToken: "*",
-					n:              0,
-					m:              -1,
+					typ:      Repetition,
+					token:    "*",
+					source:   "*",
+					n:        0,
+					m:        -1,
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case '+':
 				// one or more repetitions - same as {1,}
 				result = Token{
-					typ:            Repetition,
-					token:          "+",
-					formattedToken: "+",
-					n:              1,
-					m:              -1,
+					typ:      Repetition,
+					token:    "+",
+					source:   "+",
+					n:        1,
+					m:        -1,
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case ':':
 				typ = OptionAST // choose first for now
 				token.WriteRune(nextChar)
-				formattedToken.WriteRune(nextChar)
+				source.WriteRune(nextChar)
 				continue MAIN_LOOP
 
 			case '^':
 				result = Token{
-					typ:            Hat,
-					token:          "^",
-					formattedToken: "^",
+					typ:      Hat,
+					token:    "^",
+					source:   "^",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case '(':
 				result = Token{
-					typ:            OpenParens,
-					token:          "(",
-					formattedToken: "(",
+					typ:      OpenParens,
+					token:    "(",
+					source:   "(",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case ')':
 				result = Token{
-					typ:            CloseParens,
-					token:          ")",
-					formattedToken: ")",
+					typ:      CloseParens,
+					token:    ")",
+					source:   ")",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case '|':
 				result = Token{
-					typ:            Bar,
-					token:          "|",
-					formattedToken: "|",
+					typ:      Bar,
+					token:    "|",
+					source:   "|",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case ',':
 				result = Token{
-					typ:            Comma,
-					token:          ",",
-					formattedToken: ",",
+					typ:      Comma,
+					token:    ",",
+					source:   ",",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
@@ -425,11 +438,13 @@ MAIN_LOOP:
 					panic(ErrUnexpectedEOF)
 				}
 
-				if nextChar = l.iter.RuneValue(); nextChar == '=' {
+				if nextChar = l.iter.Value(); nextChar == '=' {
 					result = Token{
-						typ:            DoubleEquals,
-						token:          "==",
-						formattedToken: "==",
+						typ:      DoubleEquals,
+						token:    "==",
+						source:   "==",
+						line:     line,
+						position: position,
 					}
 					break MAIN_LOOP
 				}
@@ -438,17 +453,21 @@ MAIN_LOOP:
 				l.iter.Unread(nextChar)
 
 				result = Token{
-					typ:            Equals,
-					token:          "=",
-					formattedToken: "=",
+					typ:      Equals,
+					token:    "=",
+					source:   "=",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 
 			case ';':
 				result = Token{
-					typ:            SemiColon,
-					token:          ";",
-					formattedToken: ";",
+					typ:      SemiColon,
+					token:    ";",
+					source:   ";",
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 			}
@@ -461,7 +480,7 @@ MAIN_LOOP:
 				((nextChar >= '0') && (nextChar <= '9')) ||
 				(nextChar == '_') {
 				token.WriteRune(nextChar)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 				continue MAIN_LOOP
 			}
 
@@ -470,9 +489,11 @@ MAIN_LOOP:
 
 			// Identifier is what we have before this char
 			result = Token{
-				typ:            typ,
-				token:          token.String(),
-				formattedToken: formattedToken.String(),
+				typ:      typ,
+				token:    token.String(),
+				source:   source.String(),
+				line:     line,
+				position: position,
 			}
 			break MAIN_LOOP
 
@@ -499,15 +520,17 @@ MAIN_LOOP:
 				if (nextChar == '\r') || (nextChar == '\n') {
 					// No need to push back eol char, don't need to consume more eol chars
 					result = Token{
-						typ:            typ,
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
+						typ:      typ,
+						token:    token.String(),
+						source:   source.String(),
+						line:     line,
+						position: position,
 					}
 					break MAIN_LOOP
 				}
 
 				token.WriteRune(nextChar)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 				continue MAIN_LOOP
 
 			case 2:
@@ -520,16 +543,18 @@ MAIN_LOOP:
 				}
 
 				token.WriteRune(nextChar)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 				continue MAIN_LOOP
 
 			default:
 				// multiline looking for / after *
 				if nextChar == '/' {
 					result = Token{
-						typ:            typ,
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
+						typ:      typ,
+						token:    token.String(),
+						source:   source.String(),
+						line:     line,
+						position: position,
 					}
 					break MAIN_LOOP
 				}
@@ -537,8 +562,8 @@ MAIN_LOOP:
 				// Write a * and this char since we know the * is part of comment
 				token.WriteRune('*')
 				token.WriteRune(nextChar)
-				formattedToken.WriteRune('*')
-				formattedToken.WriteString(nextCharText)
+				source.WriteRune('*')
+				source.WriteString(nextCharText)
 
 				// Go back to looking for *
 				commentState = 2
@@ -553,18 +578,20 @@ MAIN_LOOP:
 			if (doubleQuotes && (nextChar == '"') && (!nextCharEscaped)) ||
 				((!doubleQuotes) && (nextChar == '\'') && (!nextCharEscaped)) {
 				// Allow zero length terminals, they mean epsilon
-				formattedToken.WriteRune(nextChar)
+				source.WriteRune(nextChar)
 				result = Token{
-					typ:            typ,
-					token:          token.String(),
-					formattedToken: formattedToken.String(),
+					typ:      typ,
+					token:    token.String(),
+					source:   source.String(),
+					line:     line,
+					position: position,
 				}
 				break MAIN_LOOP
 			}
 
 			// Part of terminal string
 			token.WriteRune(nextChar)
-			formattedToken.WriteString(nextCharText)
+			source.WriteString(nextCharText)
 			continue MAIN_LOOP
 
 		case CharacterRange:
@@ -586,7 +613,7 @@ MAIN_LOOP:
 			switch rangeState {
 			case 0: // First char
 				token.WriteString(nextCharText)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 
 				// If nextChar is ^ and range is already inverted, must be ^^, where second ^ is literal, and is part of range
 				if (nextChar == '^') && (!rangeInverted) {
@@ -603,9 +630,11 @@ MAIN_LOOP:
 						return Token{
 							typ:               typ,
 							token:             token.String(),
-							formattedToken:    formattedToken.String(),
+							source:            source.String(),
 							charRangeInverted: rangeInverted,
 							charRange:         rangeChars,
+							line:              line,
+							position:          position,
 						}
 					}
 
@@ -619,7 +648,7 @@ MAIN_LOOP:
 
 			case 1: // Possible range begin
 				token.WriteString(nextCharText)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 
 				if (nextChar == ']') && (!nextCharEscaped) {
 					// last char in rangeBegin is a literal char
@@ -627,9 +656,11 @@ MAIN_LOOP:
 					return Token{
 						typ:               typ,
 						token:             token.String(),
-						formattedToken:    formattedToken.String(),
+						source:            source.String(),
 						charRangeInverted: rangeInverted,
 						charRange:         rangeChars,
+						line:              line,
+						position:          position,
 					}
 				}
 
@@ -649,20 +680,22 @@ MAIN_LOOP:
 				if (nextChar == ']') && (!nextCharEscaped) {
 					// previous dash was a literal dash at end
 					token.WriteString(nextCharText)
-					formattedToken.WriteString(nextCharText)
+					source.WriteString(nextCharText)
 					rangeChars[rangeBegin] = true
 					rangeChars['-'] = true
 					return Token{
 						typ:               typ,
 						token:             token.String(),
-						formattedToken:    formattedToken.String(),
+						source:            source.String(),
 						charRangeInverted: rangeInverted,
 						charRange:         rangeChars,
+						line:              line,
+						position:          position,
 					}
 				}
 
 				token.WriteString(nextCharText)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 
 				// range from rangeBegin thru nextChar inclusive
 				if rangeBegin > nextChar {
@@ -683,18 +716,20 @@ MAIN_LOOP:
 					//						panic("here")
 					//					}
 					token.WriteString(nextCharText)
-					formattedToken.WriteString(nextCharText)
+					source.WriteString(nextCharText)
 					return Token{
 						typ:               typ,
 						token:             token.String(),
-						formattedToken:    formattedToken.String(),
+						source:            source.String(),
 						charRangeInverted: rangeInverted,
 						charRange:         rangeChars,
+						line:              line,
+						position:          position,
 					}
 				}
 
 				token.WriteString(nextCharText)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 
 				// Any char after range end is literal, may be start of next range
 				rangeState = 1
@@ -714,7 +749,7 @@ MAIN_LOOP:
 					}
 
 					token.WriteRune(nextChar)
-					formattedToken.WriteString(nextCharText)
+					source.WriteString(nextCharText)
 					continue MAIN_LOOP
 				}
 
@@ -722,14 +757,14 @@ MAIN_LOOP:
 					// Form is {,N}; don't set n = 1 yet, in case we have only a comma, which is invalid
 					repetitionState = true // Read M, if we have it
 					token.WriteRune(nextChar)
-					formattedToken.WriteString(nextCharText)
+					source.WriteString(nextCharText)
 					continue MAIN_LOOP
 				}
 
 				if nextChar == '}' {
 					// form {N}
 					token.WriteRune(nextChar)
-					formattedToken.WriteString(nextCharText)
+					source.WriteString(nextCharText)
 
 					if repetitionN < 1 {
 						// N must have a value >= 1
@@ -737,11 +772,13 @@ MAIN_LOOP:
 					}
 
 					result = Token{
-						typ:            typ,
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
-						n:              repetitionN,
-						m:              repetitionN, // M = N
+						typ:      typ,
+						token:    token.String(),
+						source:   source.String(),
+						n:        repetitionN,
+						m:        repetitionN, // M = N
+						line:     line,
+						position: position,
 					}
 					break MAIN_LOOP
 				}
@@ -757,7 +794,7 @@ MAIN_LOOP:
 					}
 
 					token.WriteRune(nextChar)
-					formattedToken.WriteString(nextCharText)
+					source.WriteString(nextCharText)
 					continue MAIN_LOOP
 				}
 
@@ -776,7 +813,7 @@ MAIN_LOOP:
 					}
 
 					token.WriteRune(nextChar)
-					formattedToken.WriteString(nextCharText)
+					source.WriteString(nextCharText)
 
 					// If N = -1, must be {,N} - provide 0, M
 					if repetitionN == -1 {
@@ -784,11 +821,13 @@ MAIN_LOOP:
 					}
 
 					result = Token{
-						typ:            typ,
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
-						n:              repetitionN,
-						m:              repetitionM,
+						typ:      typ,
+						token:    token.String(),
+						source:   source.String(),
+						n:        repetitionN,
+						m:        repetitionM,
+						line:     line,
+						position: position,
 					}
 					break MAIN_LOOP
 				}
@@ -801,7 +840,7 @@ MAIN_LOOP:
 			// Like identifier, negative end: stop on first non-letter char
 			if (nextChar >= 'A') && (nextChar <= 'Z') {
 				token.WriteRune(nextChar)
-				formattedToken.WriteString(nextCharText)
+				source.WriteString(nextCharText)
 				continue MAIN_LOOP
 			}
 
@@ -813,9 +852,11 @@ MAIN_LOOP:
 			for i, optionStr := range optionStrings {
 				if tokenStr == optionStr {
 					result = Token{
-						typ:            LexType(int(OptionAST) + i),
-						token:          token.String(),
-						formattedToken: formattedToken.String(),
+						typ:      LexType(int(OptionAST) + i),
+						token:    token.String(),
+						source:   source.String(),
+						line:     line,
+						position: position,
 					}
 					break MAIN_LOOP
 				}
@@ -826,4 +867,14 @@ MAIN_LOOP:
 	}
 
 	return result
+}
+
+// Line returns the current line number, starting at 1
+func (l *Lexer) Line() int {
+	return l.iter.Line()
+}
+
+// Position returns the position on the current line, starting at 1
+func (l *Lexer) Position() int {
+	return l.iter.Position()
 }

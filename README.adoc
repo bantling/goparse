@@ -12,30 +12,30 @@ The EBNF syntax varies from the one described by making it more like the regular
 and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form).
 
 . Character set
-.. UTF8 encoding is expected
+.. UTF8 encoding
 .. ASCII control characters other than tab, carriage return, and newline are useless
 .. There are no escapes for useless ASCII control characters, only \t, \r, and \n
 .. There are no \xXX or \uXXXX escapes, as all editors can handle unicode
 .. This means that the set of allowable characters is [\t\r\n -~,\u0080-]
+. Comments
+.. Single line starting with // and ending with any EOL sequence
+.. Mutiline starting with /* and ending with with */
+.. Comments are on lines by themselves, separated from definitions by an EOL
 . Terminals are one more single or double-quoted strings and/or square bracket character ranges
 . A character range is interpreted as follows:
-.. If the first character is ^ it means the range is all unicode characters except uselesss ASCII control characters and the ranges that follow
+.. If the first character is ^ it means the range is all allowable characters except the ranges that follow
 .. In any other position a ^ is a literal character
-.. A sequence of X-Y indicates a closed range of characters from X through Y
+.. A sequence of X-Y indicates a range of characters from X through Y inclusive
 .. A - is a literal character in the following circumstances:
 ... It is the first character, or second character if first is ^
 ... It is the last character
 ... It immediately follows a range (eg, A-Z- means A thru Z and -)
 .. Since there is no escape sequence for ^ or -, if they are to be included literally, they must be placed in a position that makes them literal 
 . The following sequences in a string or character range have their usual meaning: \\, \t, \r, \n  
-.. Inside a terminal string, both single and double quotes can be escaped
-.. Inside a character range, a closing square bracket can be escaped
-. A list contains one or more nonterminal names and/or terminals  
-. A group is a list enclosed in round brackets, or a single list item without round brackets
-. A single terminal or group of terminals only may be preceded by a ^ to indicate that the terminals represent literal sequences that are not part of token, but indicate the end of the token.
-.. If no grouping is used, the ^ only applies to the immediately following terminal
-.. The ^ cannot precede the first terminal of a rule
-. A production is a group that may be followed by the number of repetitions:
+.. Inside a string, both single and double quotes can be escaped ( \' or \").
+Escapes are only required if both single and double quotes are used in a string.
+.. Inside a character range, a closing square bracket must be escaped (\])
+. A repetition describes how many times a string or range is repeated:
 .. ? for 0 or 1 repetitions
 .. * for 0 or more repetitions
 .. + for 1 or more repetitions
@@ -43,60 +43,95 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 .. {N,} for at least N repetitions, where N ≥ 0
 .. {,N} for at most N repetitions, where N ≥ 1
 .. {N,M} for at least N and at most M repetitions, where N ≥ 0, M ≥ N and if N = 0 then M ≥ 1
-. A nonterminal name is a letter followed by letters, digits, and dashes
-. A rule is a nonterminal name, an equals sign, and a vertical bar seperated list of productions
-.. A double equals can be used to indicate that this rule is whitespace significant
-. A nonterminal may be recursive by having one or more productions containing the nonterminal name
-. A terminal string cannot be empty
-. Comments
-.. Single line starting with // and ending with any EOL sequence
-.. Mutiline starting with /* and ending with with */
-. Auto CST generation - a rule name or string terminal in a rule definition may be followed by :AST to indicate it is not needed in the parse tree, only in the String() method
+. An identifier is a letter followed by zero or more letters, digits, and dashes
+. An expression is:
+.. A terminal or identifier optionally followed by a repetition
+.. An optional join followed by the above, zero or more times
+. A definition is identifier = vertical bar separated list of expressions ending in a semi-colon and EOL
+. There are two sections, called STRINGS and NODES
+.. STRINGS definitions:
+... Are field values of parse nodes
+... If a single expression part has several terminals in a row, they are assumed to have no whitespace or EOLs between them,
+unless a terminal explicitly contains whitespace or EOL chars.
+... All terminals are part of the definition, and are reflected in the field value of the node 
+.. NODES definition:
+... Are parse nodes that contains fields which can be a node or string
+... If a single expression part has several terminals in a row, they are assumed to require whitespace between them,
+unless a join is used between them
+... All terminals are assumed to be structural text that is part of the String() method of the node, but are not stored in a field.
+... All identifiers that are defined in either STRINGS or NODES are taken to be field values to keep track of.
+... Placing terminals in NODES definitions allows for defining needed char sequences that make the code more readable,
+but are not needed during parsing. 
 . Pretty printing
-.. Affects only the String() method of each node
+.. Affects only the FormattedString() method of each node
 .. A rule name or terminal in a rule definition may be followed by:
 ... :EOL to add a newline and current identation
 ... :INDENT to increase indent by 4 spaces
 ... :OUTDENT to decrease indent by 4 spaces
 ... May be combined like :EOL:INDENT or :EOL :OUTDENT
-... :PREEOL, :PREINDENT, and :PREOUTDENT can also be used to add whitespace before the terminal or rulename
+... :PREEOL, :PREINDENT, and :PREOUTDENT can also be used to add whitespace before the terminal or identifier
 ... Outdenting can never go below 0
-.. A pretty printer to be created simply by parsing and calling the String() method of root node.
+.. A pretty printer to be created simply by parsing and calling the FormattedString() method of root node.
 
 This variant of EBNF can be described in its own rules as follows:
 ....
-non-escape-char = [^\\]
-comment-oneline == "//" non-escape-char* ^("\r" | "\n" | "\r\n")
-comment-multiline = "/*" non-escape-char* "*/"
-comment = comment-oneline | comment-multiline 
+STRINGS
 
-general-escape = "\\" | "\t" | "\r" | "\n"
-string-escape = general-escape | "\'" | '\"'
-string-char = non-escape-char | string-escape
-string = "'" string-char+ "'" | '"' string-char+ '"'
+comment-one-line = "//" [^\r\n]*
+comment-multi-line = "/*" [^] "*/"
 
-range-escape = general-escape | "\]"
-range = "[" (non-escape-char | range-escape)+ "]"
+general-escape-char = "\\\\" | "\\t" | "\\r" | "\\n"
+string-escape-char = general-escape-char | "\\'" | '\\"'
+string-chars = [^\\'"] | string-escape-char
+string = "'" string-chars+ "'" | '"' string-chars+ '"'
 
+range-escape-char = general-escape-char | "\\]"
+range-chars = [^\\\]] | range-escape-char
+range = "[" range-chars+ "]"
+
+zero-or-one = "?"
+zero-or-more = "*"
+one-or-more = "+"
 int = [0-9]+
-repetition = 
-  [?*+]
-  | "{" int "}"
-  | "{" int "," "}"
-  | "{" "," int "}"
-  | "{" int "," int "}"
+n = int
+m = int
 
-terminal = (string | range)+
 identifier = [A-Za-z][A-Za-z0-9-]*
 
-terminals = terminal | "(" terminal ("|" terminal)* ")"
-inverted-terminals = "^" terminals
-expression-part = terminal | identifier
-expression = inverted-terminals | (expression-part+ | "(" expression-part+ ")") repetition?
- 
-production = expression+  
-productions = production ("|":PREEOL:PREOUTDENT:PREINDENT production)*
-nonterminal = identifier ("=" | "==") productions ";"
+join = "~"
 
-grammar = nonterminal+
+NODES
+
+comment = comment-one-line | comment-multi-line [ \t]* [\r\n] 
+terminal-parts = string | range
+terminal = terminal-parts+
+
+n-exactly = "{" ~ n ~ "}"
+n-or-more = "{" ~ n ~ ",}"
+up-to-m = "{," ~ m ~ "}"
+n-to-m = "{" ~ n ~ "," ~ m ~ "}"
+
+repetition = zero-or-one
+  | zero-or-more
+  | one-or-more
+  | n-exactly
+  | n-or-more
+  | up-to-m
+  | n-to-m
+
+term = terminal | identifier
+joined-term = join? term
+first-term = term ~ repetition? 
+more-terms = joined-term ~ repetition? 
+expression = first-term more-terms+
+ 
+more-expressions = "|":PREEOL:PREOUTDENT:PREINDENT expression
+productions = expression more-expressions*
+
+definition = identifier "=" productions ";" ~ [ \t]* ~ [\r\n]
+section-parts = comment | definition
+strings-section = "STRINGS" ~ [ \t]* ~ [\r\n] section-parts+
+nodes-section = "NODES" ~ [ \t]* ~ [\r\n] section-parts+
+
+grammar = strings-section nodes-section
 ....
