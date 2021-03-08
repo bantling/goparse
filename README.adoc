@@ -72,6 +72,14 @@ but are not needed during parsing.
 ... :PREEOL, :PREINDENT, and :PREOUTDENT can also be used to add whitespace before the terminal or identifier
 ... Outdenting can never go below 0
 .. A pretty printer to be created simply by parsing and calling the FormattedString() method of root node.
+. Generated node and field names
+.. A definition is a node with fields for the right hand side identifiers
+.. Identifiers are translated into camel case: nodes-section becomes NodesSection
+.. Whether node and identifier names begin with an upper or lower case letter is dependent target language conventions
+.. if a field names begins with the definition name and optional dash, they are removed
+.. EG:
+... terminal = terminal-parts+: node Terminal with one field Parts
+... nodes-section = "NODES" ~ [ \t]* ~ [\r\n] section-parts+: node NodesSection with one field SectionParts  
 
 This variant of EBNF can be described in its own rules as follows:
 ....
