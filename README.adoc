@@ -74,12 +74,26 @@ but are not needed during parsing.
 .. A pretty printer to be created simply by parsing and calling the FormattedString() method of root node.
 . Generated node and field names
 .. A definition is a node with fields for the right hand side identifiers
-.. Identifiers are translated into camel case: nodes-section becomes NodesSection
-.. Whether node and identifier names begin with an upper or lower case letter is dependent target language conventions
-.. if a field names begins with the definition name and optional dash, they are removed
+.. Identifiers are translated into camel case with dashes removed: nodes-section becomes NodesSection
+.. Exact node and identifier names are dependent on target language conventions (eg, do they start with lower or upper case)
+.. If a field names begins with the definition name and optional dash, they are removed
+.. If a node or field name is an invalid identifier in the target language (eg, reserved keyword), then an extra character is added to the end to make it legal (eg, underscore)
+.. If a definition uses alternations ("|"), then the alternations are separate fields
+... An enum is generated with constants for each alternation
+... An added getter provides the enum constant for this particular instance
+... A series of getters provide each possible value, where all but one throw an exception
+... A series of "is" methods for each enum constant return boolean true if the value is that particular type, else false
+.. Both nodes andd fields have two string methods
+... String returns the string exactly as given in the source code, including whitespace
+... FormattedString returns the pretty printed string
 .. EG:
 ... terminal = terminal-parts+: node Terminal with one field Parts
-... nodes-section = "NODES" ~ [ \t]* ~ [\r\n] section-parts+: node NodesSection with one field SectionParts  
+... nodes-section = "NODES" ~ [ \t]* ~ [\r\n] section-parts+: node NodesSection with one field SectionParts
+... comment = comment-one-line | comment-multi-line [ \t]* [\r\n]
+.... Node comment has two fields OneLine and MultiLine (comment- prefix is removed)
+.... An enum CommentType contains constants for CommentOneLine and CommentMultiLine
+.... getters GetCommentType(), GetOneLine(), and GetMultiLine()
+s.... is methods IsOneLine() and IsMultiLine()
 
 This variant of EBNF can be described in its own rules as follows:
 ....
