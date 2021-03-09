@@ -12,7 +12,7 @@ import (
 type lexType uint
 
 const (
-	lexInvalid = iota
+	lexEOF = iota
 	lexCommentOneLine
 	lexCommentMultiLine
 	lexString
@@ -28,9 +28,10 @@ const (
 
 // lexical table actions
 const (
-	lexUnread      uint = 0x1
-	lexDone        uint = 0x2
-	lexSyntaxError uint = 0x4
+	lexSkip   uint = 0x1
+	lexUnread uint = 0x2
+	lexEOFOK  uint = 0x4
+	lexDone   uint = 0x8
 )
 
 // the next table row to jump to and/or which actions to take
@@ -43,6 +44,7 @@ type lexActions struct {
 // lexical errors
 const (
 	lexErrSyntax = "Syntax error at line %d character %d"
+	lexErrEOF    = "Invalid EOF at line %d character %d"
 )
 
 // LexError describes a lexical error
@@ -53,10 +55,10 @@ type LexError struct {
 }
 
 // panic with a LexError
-func panicLexError(line, position int) {
+func panicLexError(msg string, line, position int) {
 	panic(
 		LexError{
-			err:      fmt.Sprintf(lexErrSyntax, line, position),
+			err:      fmt.Sprintf(msg, line, position),
 			line:     line,
 			position: position,
 		},
@@ -73,24 +75,24 @@ var (
 	// Since a rune is actually an int32, use -1 to refer to any other character.
 	// If a row does not contain an entry for a given rune, and contains no -1 entry, it is a syntax error.
 	lexTable = []map[rune]lexActions{
-		// 0
+		// 0 - skip ws
 		{
-			'\t': {},
-			'\r': {},
-			'\n': {},
-			' ':  {},
+			'\t': {actions: lexSkip},
+			'\r': {actions: lexSkip},
+			'\n': {actions: lexSkip},
+			' ':  {actions: lexSkip},
 			'/':  {row: 1},
 		},
 		// 1
 		{
-			'/': {row: 2},
+			'/': {actions: lexEOFOK, row: 2},
 			'*': {row: 3},
 		},
 		// 2 - comment-one-line
 		{
 			'\r': {actions: lexUnread | lexDone, lexType: lexCommentOneLine},
 			'\n': {actions: lexUnread | lexDone, lexType: lexCommentOneLine},
-			-1:   {row: 2},
+			-1:   {actions: lexEOFOK, row: 2},
 		},
 		// 3 - comment-multi-line
 		{
@@ -133,9 +135,11 @@ func (l *lexer) next() lexicalToken {
 		// line and position where token started
 		line        int
 		position    int
-		row         map[rune]lexActions
+		row         = lexTable[0]
 		lexActions  lexActions
 		haveActions bool
+		writeChar   bool
+		eofOK       bool
 		result      lexicalToken
 	)
 
@@ -150,22 +154,30 @@ func (l *lexer) next() lexicalToken {
 		}
 		if !haveActions {
 			// panic at current line and position, not where token started
-			panicLexError(l.iter.Line(), l.iter.Position())
+			panicLexError(lexErrSyntax, l.iter.Line(), l.iter.Position())
 		}
+
+		writeChar = true
 
 		// skipping chars only occurs before we recognize the first char of the next token
 		// advance line and position if the token is empty, so it points at first char we care about
-		if token.Len() == 0 {
+		if (lexActions.actions & lexSkip) > 0 {
 			line = l.iter.Line()
 			position = l.iter.Position()
+			writeChar = false
 		}
 
 		// either the char is unread because it belongs to next token, or we write it as part of this token
 		if (lexActions.actions & lexUnread) > 0 {
 			l.iter.Unread(nextChar)
-		} else {
+			writeChar = false
+		}
+
+		if writeChar {
 			token.WriteRune(nextChar)
 		}
+
+		eofOK = (lexActions.actions & lexEOFOK) > 0
 
 		// done means we've read final char of this token (or first char of next token in case of unread)
 		if (lexActions.actions & lexDone) > 0 {
@@ -183,5 +195,11 @@ func (l *lexer) next() lexicalToken {
 		row = lexTable[lexActions.row]
 	}
 
+	// cannot not encounter EOF in the middle of a token unless allowed
+	if (token.Len() > 0) && (!eofOK) {
+		panicLexError(lexErrEOF, l.iter.Line(), l.iter.Position())
+	}
+
+	// have a valid token
 	return result
 }
