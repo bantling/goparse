@@ -8,11 +8,12 @@ import (
 	"github.com/bantling/goiter"
 )
 
-// lexical token type
+// Lexical token type
 type lexType uint
 
 const (
-	lexEOF = iota
+	lexInvalid lexType = iota
+	lexEOF
 	lexCommentOneLine
 	lexCommentMultiLine
 	lexString
@@ -26,7 +27,7 @@ const (
 	lexJoin
 )
 
-// lexical table actions
+// Lexical table actions
 const (
 	lexSkip   uint = 0x1
 	lexUnread uint = 0x2
@@ -34,14 +35,14 @@ const (
 	lexDone   uint = 0x8
 )
 
-// the next table row to jump to and/or which actions to take
+// The next table row to jump to and/or which actions to take
 type lexActions struct {
 	row     uint
 	actions uint
 	lexType lexType
 }
 
-// lexical errors
+// Lexical errors
 const (
 	lexErrSyntax = "Syntax error at line %d character %d"
 	lexErrEOF    = "Invalid EOF at line %d character %d"
@@ -54,7 +55,7 @@ type LexError struct {
 	position int
 }
 
-// panic with a LexError
+// Panic with a LexError
 func panicLexError(msg string, line, position int) {
 	panic(
 		LexError{
@@ -71,28 +72,27 @@ func (l LexError) Error() string {
 }
 
 var (
-	// lexical analyzer table, where each row is compressed into a map.
+	// Lexical analyzer table, where each row is compressed into a map.
 	// Since a rune is actually an int32, use -1 to refer to any other character.
 	// If a row does not contain an entry for a given rune, and contains no -1 entry, it is a syntax error.
 	lexTable = []map[rune]lexActions{
 		// 0 - skip ws
 		{
-			'\t': {actions: lexSkip},
-			'\r': {actions: lexSkip},
-			'\n': {actions: lexSkip},
-			' ':  {actions: lexSkip},
+			'\t': {actions: lexSkip | lexEOFOK, lexType: lexEOF},
+			'\n': {actions: lexSkip | lexEOFOK, lexType: lexEOF}, // goiter.RunePositionIter coalesces all EOLs into \n
+			' ':  {actions: lexSkip | lexEOFOK, lexType: lexEOF},
 			'/':  {row: 1},
 		},
 		// 1
 		{
-			'/': {actions: lexEOFOK, row: 2},
+			'/': {actions: lexEOFOK, row: 2, lexType: lexCommentOneLine},
 			'*': {row: 3},
 		},
 		// 2 - comment-one-line
 		{
 			'\r': {actions: lexUnread | lexDone, lexType: lexCommentOneLine},
 			'\n': {actions: lexUnread | lexDone, lexType: lexCommentOneLine},
-			-1:   {actions: lexEOFOK, row: 2},
+			-1:   {actions: lexEOFOK, lexType: lexCommentOneLine, row: 2},
 		},
 		// 3 - comment-multi-line
 		{
@@ -108,7 +108,7 @@ var (
 	}
 )
 
-// lexical token to return to parser
+// Lexical token to return to parser
 type lexicalToken struct {
 	lexType  lexType
 	token    string
@@ -116,90 +116,94 @@ type lexicalToken struct {
 	position int
 }
 
-// lexical analyzer
+// Lexical analyzer
 type lexer struct {
 	iter *goiter.RunePositionIter
 }
 
-// construct lexer
+// Construct lexer
 func newLexer(source io.Reader) *lexer {
 	return &lexer{
 		iter: goiter.NewRunePositionIter(source),
 	}
 }
 
-// read next lexical token
+// Read next lexical token
 func (l *lexer) next() lexicalToken {
 	var (
-		token strings.Builder
+		nextChar rune
+		token    strings.Builder
 		// line and position where token started
-		line        int
-		position    int
-		row         = lexTable[0]
-		lexActions  lexActions
-		haveActions bool
-		writeChar   bool
-		eofOK       bool
-		result      lexicalToken
+		line     = 1
+		position = 1
+		row      = lexTable[0]
+		// initial actions in case we read EOF on first call to iter.Next
+		theLexActions = lexActions{actions: lexSkip | lexEOFOK, lexType: lexEOF}
+		haveActions   bool
+		eofOK         bool
+		writeChar     bool
 	)
 
-	for l.iter.Next() {
-		nextChar := l.iter.Value()
+	for {
+		haveActions = false
+		if l.iter.Next() {
+			nextChar = l.iter.Value()
 
-		// get actions for char if they exist
-		lexActions, haveActions = row[nextChar]
-		if !haveActions {
-			// get default actions, if they exist
-			lexActions, haveActions = row[-1]
-		}
-		if !haveActions {
-			// panic at current line and position, not where token started
-			panicLexError(lexErrSyntax, l.iter.Line(), l.iter.Position())
+			// get actions for char if they exist
+			theLexActions, haveActions = row[nextChar]
+			if !haveActions {
+				// get default actions, if they exist
+				theLexActions, haveActions = row[-1]
+			}
+			if !haveActions {
+				// panic at current line and position, not where token started
+				panicLexError(lexErrSyntax, l.iter.Line(), l.iter.Position())
+			}
+		} else {
+			if eofOK = (theLexActions.actions & lexEOFOK) > 0; !eofOK {
+				panicLexError(lexErrEOF, l.iter.Line(), l.iter.Position())
+			}
+			break
 		}
 
 		writeChar = true
 
 		// skipping chars only occurs before we recognize the first char of the next token
 		// advance line and position if the token is empty, so it points at first char we care about
-		if (lexActions.actions & lexSkip) > 0 {
+		if (theLexActions.actions & lexSkip) > 0 {
 			line = l.iter.Line()
 			position = l.iter.Position()
 			writeChar = false
 		}
 
 		// either the char is unread because it belongs to next token, or we write it as part of this token
-		if (lexActions.actions & lexUnread) > 0 {
+		if (theLexActions.actions & lexUnread) > 0 {
 			l.iter.Unread(nextChar)
 			writeChar = false
+		}
+
+		if (theLexActions.actions & lexDone) > 0 {
+			break
 		}
 
 		if writeChar {
 			token.WriteRune(nextChar)
 		}
 
-		eofOK = (lexActions.actions & lexEOFOK) > 0
-
-		// done means we've read final char of this token (or first char of next token in case of unread)
-		if (lexActions.actions & lexDone) > 0 {
-			result = lexicalToken{
-				lexType:  lexActions.lexType,
-				token:    token.String(),
-				line:     line,
-				position: position,
-			}
-
-			break
-		}
-
 		// jump to next row (which could be same row)
-		row = lexTable[lexActions.row]
+		row = lexTable[theLexActions.row]
 	}
 
 	// cannot not encounter EOF in the middle of a token unless allowed
-	if (token.Len() > 0) && (!eofOK) {
+	if (theLexActions.lexType == lexEOF) && (!eofOK) {
 		panicLexError(lexErrEOF, l.iter.Line(), l.iter.Position())
 	}
 
 	// have a valid token
-	return result
+	return lexicalToken{
+		lexType:  theLexActions.lexType,
+		token:    token.String(),
+		line:     line,
+		position: position,
+	}
 }
