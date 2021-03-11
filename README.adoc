@@ -14,9 +14,10 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 . Character set
 .. UTF8 encoding
 .. ASCII control characters other than tab, carriage return, and newline are useless
-.. There are no escapes for useless ASCII control characters, only \t, \r, and \n
+.. There are no escapes for useless ASCII control characters, only \t, and \n
+.. The \n escape represents any valid EOL sequence: \r, \n, or \r\n
 .. There are no \xXX or \uXXXX escapes, as all editors can handle unicode
-.. This means that the set of allowable characters is [\t\r\n -~,\u0080-]
+.. This means that the set of allowable characters is [\t\n -~,\u0080-]
 . Comments
 .. Single line starting with // and ending with any EOL sequence
 .. Mutiline starting with /* and ending with with */
@@ -31,7 +32,7 @@ and is not compatible with BNF (see https://en.wikipedia.org/wiki/Backus%E2%80%9
 ... It is the last character
 ... It immediately follows a range (eg, A-Z- means A thru Z and -)
 .. Since there is no escape sequence for ^ or -, if they are to be included literally, they must be placed in a position that makes them literal 
-. The following sequences in a string or character range have their usual meaning: \\, \t, \r, \n  
+. The following sequences in a string or character range have their usual meaning: \\, \t, \n  
 .. Inside a string, both single and double quotes can be escaped ( \' or \").
 Escapes are only required if both single and double quotes are used in a string.
 .. Inside a character range, a closing square bracket must be escaped (\])
@@ -76,8 +77,8 @@ but are not needed during parsing.
 .. A definition is a node with fields for the right hand side identifiers
 .. Identifiers are translated into camel case with dashes removed: nodes-section becomes NodesSection
 .. Exact node and identifier names are dependent on target language conventions (eg, do they start with lower or upper case)
-.. If a field names begins with the definition name and optional dash, they are removed
-.. If a node or field name is an invalid identifier in the target language (eg, reserved keyword), then an extra character is added to the end to make it legal (eg, underscore)
+.. If a field name begins with the definition name and optional dash, they are removed
+.. If a node or field name is an invalid identifier in the target language (eg, reserved keyword), then extra character(s) are added to make it legal
 .. If a definition uses alternations ("|"), then the alternations are separate fields
 ... An enum is generated with constants for each alternation
 ... An added getter provides the enum constant for this particular instance
@@ -88,27 +89,28 @@ but are not needed during parsing.
 ... FormattedString returns the pretty printed string
 .. EG:
 ... terminal = terminal-parts+: node Terminal with one field Parts
-... nodes-section = "NODES" ~ [ \t]* ~ [\r\n] section-parts+: node NodesSection with one field SectionParts
-... comment = comment-one-line | comment-multi-line [ \t]* [\r\n]
+... nodes-section = "NODES" ~ [ \t]* ~ [\n] section-parts+: node NodesSection with one field SectionParts
+... comment = comment-one-line | comment-multi-line [ \t]* [\n]
 .... Node comment has two fields OneLine and MultiLine (comment- prefix is removed)
 .... An enum CommentType contains constants for CommentOneLine and CommentMultiLine
 .... getters GetCommentType(), GetOneLine(), and GetMultiLine()
-s.... is methods IsOneLine() and IsMultiLine()
+.... is methods IsOneLine() and IsMultiLine()
 
 This variant of EBNF can be described in its own rules as follows:
 ....
 STRINGS
 
-comment-one-line = "//" [^\r\n]*
+comment-one-line = "//" [^\n]*
 comment-multi-line = "/*" [^] "*/"
 
-general-escape-char = "\\\\" | "\\t" | "\\r" | "\\n"
+general-escape-char = "\\\\" | "\\t" | "\\n"
 string-escape-char = general-escape-char | "\\'" | '\\"'
-string-chars = [^\\'"] | string-escape-char
-string = "'" string-chars+ "'" | '"' string-chars+ '"'
+string-sq-chars = [^\\'] | string-escape-char
+string-dq-chars = [^\\"] | string-escape-char
+string = "'" string-sq-chars+ "'" | '"' string-dq-chars+ '"'
 
 range-escape-char = general-escape-char | "\\]"
-range-chars = [^\\\]] | range-escape-char
+range-chars = [^\\]] | range-escape-char
 range = "[" range-chars+ "]"
 
 zero-or-one = "?"
@@ -124,7 +126,7 @@ join = "~"
 
 NODES
 
-comment = comment-one-line | comment-multi-line [ \t]* [\r\n] 
+comment = comment-one-line | comment-multi-line ~ [ \t]* ~ [\n] 
 terminal-parts = string | range
 terminal = terminal-parts+
 
@@ -150,10 +152,10 @@ expression = first-term more-terms+
 more-expressions = "|":PREEOL:PREOUTDENT:PREINDENT expression
 productions = expression more-expressions*
 
-definition = identifier "=" productions ";" ~ [ \t]* ~ [\r\n]
+definition = identifier "=" productions ";" ~ [ \t]* ~ [\n]
 section-parts = comment | definition
-strings-section = "STRINGS" ~ [ \t]* ~ [\r\n] section-parts+
-nodes-section = "NODES" ~ [ \t]* ~ [\r\n] section-parts+
+strings-section = "STRINGS" ~ [ \t]* ~ [\n] section-parts+
+nodes-section = "NODES" ~ [ \t]* ~ [\n] section-parts+
 
 grammar = strings-section nodes-section
 ....
